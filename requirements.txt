@@ -1,0 +1,8 @@
+# ベースライブラリ（ローカルインストール推奨）
+-e /Users/tinoue/Development.local/lib/image_gui_template
+
+# 追加依存関係
+customtkinter>=5.0.0
+opencv-python>=4.7.0
+Pillow>=9.0.0
+numpy>=1.21.0
