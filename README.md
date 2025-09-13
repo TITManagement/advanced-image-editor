@@ -45,13 +45,13 @@ src/
 
 ### 推奨実行方法
 ```bash
-cd /Users/tinoue/Development.local/app/advanced-image-editor
+cd <本リポジトリのクローン先ディレクトリ>
 .venv/bin/python3 src/main_plugin.py
 ```
 
 ### 仮想環境アクティベート後
 ```bash
-cd /Users/tinoue/Development.local/app/advanced-image-editor
+cd <本リポジトリのクローン先ディレクトリ>
 source .venv/bin/activate
 python src/main_plugin.py
 ```
