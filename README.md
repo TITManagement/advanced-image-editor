@@ -1,17 +1,338 @@
-# ImageEditor
+# Advanced Image Editor - Plugin System
 
-高度な画像編集機能を持つPythonアプリケーション
+プラグインシステム対応版画像編集アプリケーション
 
 ## 概要
 
-このプロジェクトは、既存のimage_gui_templateライブラリを活用して構築された、プロフェッショナル向けの画像編集アプリケーションです。
+1865行だったmain.pyをプラグインシステムで分割・整理した高度な画像編集アプリケーション。
+モジュラー設計により保守性・拡張性・可読性を大幅に向上。
 
 ## 特徴
 
+- **プラグインシステム**: 機能別完全分離による高い保守性
+- **モジュラー設計**: 独立開発・テスト可能な設計
 - **高度な画像処理**: OpenCVとPillowを使用した本格的な画像編集機能
-- **モダンなUI**: CustomTkinterによる洗練されたユーザーインターフェース
-- **ライブラリ活用**: 再利用可能なGUIコンポーネントの活用
-- **拡張可能**: プラグインシステムによる機能拡張
+- **モダンなUI**: CustomTkinterによる4タブ統一インターフェース
+- **拡張性**: 新プラグイン簡単追加
+- **分離されたアーキテクチャ**: editor/ui/utilsによる責任分担
+
+## ディレクトリ構造
+
+```
+src/
+├── core/                    # プラグインシステム中核
+│   ├── plugin_base.py      # 基底クラス・API定義
+│   └── __init__.py
+├── plugins/                 # プラグイン格納ディレクトリ
+│   ├── basic/              # 基本調整プラグイン
+│   ├── density/            # 濃度調整プラグイン
+│   ├── filters/            # フィルター処理プラグイン
+│   └── advanced/           # 高度処理プラグイン
+├── editor/                  # 画像編集機能モジュール
+│   ├── image_editor.py     # 画像読み込み・保存・表示
+│   └── __init__.py
+├── ui/                      # UI関連モジュール
+│   ├── main_window.py      # メインウィンドウUI構築
+│   └── __init__.py
+├── utils/                   # ユーティリティモジュール
+│   ├── image_utils.py      # 画像変換・処理ヘルパー
+│   └── __init__.py
+├── main.py                 # 元の1865行版（参考保持）
+└── main_plugin.py          # 新プラグインシステム版 ⭐メイン
+```
+
+## 実行方法
+
+### 推奨実行方法
+```bash
+cd /Users/tinoue/Development.local/app/advanced-image-editor
+.venv/bin/python3 src/main_plugin.py
+```
+
+### 仮想環境アクティベート後
+```bash
+cd /Users/tinoue/Development.local/app/advanced-image-editor
+source .venv/bin/activate
+python src/main_plugin.py
+```
+
+## 利用可能なプラグイン
+
+### 🎯 基本調整プラグイン (basic_adjustment)
+- **明度調整** (-100〜+100)
+- **コントラスト調整** (-100〜+100)  
+- **彩度調整** (-100〜+100)
+- **リセット機能**
+
+### 🌈 濃度調整プラグイン (density_adjustment)  
+- **ガンマ補正** (0.1〜3.0)
+- **シャドウ調整** (-100〜+100)
+- **ハイライト調整** (-100〜+100)
+- **色温度調整** (-100〜+100)
+- **ヒストグラム均等化ボタン**
+- **リセット機能**
+
+### 🌀 フィルター処理プラグイン (filter_processing)
+- **ガウシアンブラー** (0〜20)
+- **シャープニング** (0〜5.0)
+- **ノイズ除去ボタン**
+- **エンボスボタン**
+- **エッジ検出ボタン**
+- **リセット機能**
+
+### 🔧 高度処理プラグイン (advanced_processing)
+- **モルフォロジー演算**
+  - カーネルサイズ調整 (3〜15)
+  - 収縮・膨張・開放・閉鎖ボタン
+- **2値化処理**
+  - 閾値調整 (0〜255)
+  - 2値化実行ボタン
+- **輪郭検出ボタン**
+- **リセット機能**
+
+## 新しいプラグインの作成方法
+
+### Step 1: プラグインディレクトリ作成
+```bash
+mkdir src/plugins/your_plugin_name
+```
+
+### Step 2: プラグインクラス作成 
+ファイル: `your_plugin_name/your_plugin.py`
+
+```python
+from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
+import customtkinter as ctk
+from PIL import Image
+
+class YourPlugin(ImageProcessorPlugin):
+    def __init__(self):
+        """
+        プラグインの初期化
+        - plugin_id: プラグインの一意識別子（文字列）
+        - version: プラグインのバージョン（文字列）
+        """
+        super().__init__("your_plugin_name", "1.0.0")
+        self.parameter_value = 0
+    
+    def get_display_name(self) -> str:
+        """
+        UI上に表示されるプラグイン名を返す
+        戻り値: プラグインの表示名（日本語可）
+        """
+        return "あなたのプラグイン"
+    
+    def get_description(self) -> str:
+        """
+        プラグインの説明文を返す
+        戻り値: プラグインの機能説明（日本語可）
+        """
+        return "プラグインの説明をここに記載"
+    
+    def create_ui(self, parent: ctk.CTkFrame) -> None:
+        """
+        プラグインのUI要素を作成
+        引数:
+        - parent: UI要素を配置する親フレーム（CustomTkinterのCTkFrame）
+        """
+        # スライダー作成例
+        self._sliders['param'], self._labels['param'] = PluginUIHelper.create_slider_with_label(
+            parent=parent,           # 親フレーム
+            text="パラメータ名",        # スライダーのラベル
+            from_=0,                # 最小値
+            to=100,                 # 最大値
+            default_value=0,        # 初期値
+            command=self._on_parameter_change,  # 値変更時のコールバック関数
+            value_format="{:.0f}"   # 値の表示フォーマット
+        )
+    
+    def _on_parameter_change(self, value: float) -> None:
+        """
+        パラメータ変更時の処理
+        引数:
+        - value: 変更されたパラメータの値（float型）
+        """
+        self.parameter_value = int(value)
+        self._on_parameter_change()  # 親クラスのコールバック呼び出し
+    
+    def process_image(self, image: Image.Image, **params) -> Image.Image:
+        """
+        画像処理の実行
+        引数:
+        - image: 処理対象の画像（PIL.Image.Image型）
+        - **params: 追加パラメータ（辞書形式、将来の拡張用）
+        戻り値: 処理済みの画像（PIL.Image.Image型）
+        """
+        # 画像処理ロジックをここに実装
+        # self.parameter_valueを使用して画像を変換
+        return image  # 処理済み画像を返す
+```
+
+### Step 3: __init__.py作成
+ファイル: `your_plugin_name/__init__.py`
+
+```python
+from .your_plugin import YourPlugin
+__all__ = ['YourPlugin']
+```
+
+### Step 4: メインアプリに登録
+ファイル: `main_plugin.py`
+
+```python
+from plugins.your_plugin_name import YourPlugin
+
+# setup_plugins()メソッド内に追加
+your_plugin = YourPlugin()
+your_plugin.set_parameter_change_callback(self.on_plugin_parameter_change)
+self.plugin_manager.register_plugin(your_plugin)
+
+# create_plugin_tabs()メソッドのplugin_tabsに追加
+plugin_tabs = {
+    # ... 既存のタブ ...
+    "your_plugin_name": "タブ名"
+}
+```
+
+## プラグインAPI仕様
+
+### 必須実装メソッド
+- `get_display_name()`: UI表示名
+- `get_description()`: プラグイン説明  
+- `create_ui(parent)`: UI作成
+- `process_image(image, **params)`: 画像処理実行
+
+### オプションメソッド
+- `get_parameters()`: 現在のパラメータ取得
+- `reset_parameters()`: パラメータリセット
+- `set_parameter_change_callback(callback)`: パラメータ変更時コールバック
+
+### ヘルパークラス利用
+
+```python
+from core.plugin_base import PluginUIHelper
+
+# スライダー作成
+slider, label = PluginUIHelper.create_slider_with_label(
+    parent=parent,
+    text="パラメータ名",
+    from_=0,
+    to=100,
+    default_value=0,
+    command=callback_function,
+    value_format="{:.1f}"
+)
+
+# ボタン作成  
+button = PluginUIHelper.create_button(
+    parent=parent,
+    text="ボタン名",
+    command=button_callback,
+    width=120
+)
+```
+
+## アーキテクチャの特徴
+
+### 🏗️ 設計パターン
+- **SOLID原則準拠**
+- **依存性注入パターン**
+- **インターフェース統一**
+
+### 🚀 開発効率
+- **プラグイン独立開発**
+- **単体テスト容易**
+- **並行開発可能**
+
+### 🔧 保守性
+- **機能別完全分離**
+- **コード重複除去**
+- **責任分担明確**
+
+### 📈 拡張性
+- **新プラグイン簡単追加**
+- **既存コード影響なし**
+- **バージョン管理対応**
+
+## モジュール構成の詳細
+
+### 🖼️ editor/
+**画像エディター機能**
+- `image_editor.py`: 画像読み込み・保存・表示・状態管理
+- 画像ファイルの入出力処理
+- キャンバス表示とリサイズ処理
+- オリジナル/現在画像の管理
+
+### 🎨 ui/  
+**ユーザーインターフェース**
+- `main_window.py`: メインウィンドウレイアウト構築
+- ウィンドウプロパティ設定
+- パネル・キャンバス・ボタンレイアウト
+- プラグインタブビュー管理
+
+### 🔧 utils/
+**ユーティリティ機能**
+- `image_utils.py`: 画像変換・処理ヘルパー関数
+- PIL ↔ OpenCV 変換
+- 各種画像処理アルゴリズム（明度・コントラスト・彩度・ガンマ・ブラー等）
+- 画像情報取得・フォーマット処理
+
+## gui_framework連携
+
+gui_frameworkライブラリが利用可能な場合は高度なUI機能を使用。
+利用できない場合は基本機能のみで動作（フォールバック対応済み）。
+
+## トラブルシューティング
+
+### インポートエラー
+- プラグインディレクトリの`__init__.py`ファイル確認
+- Pythonパス設定確認
+
+### UI表示エラー  
+- `create_ui()`メソッドの実装確認
+- PluginUIHelperの正しい使用確認
+
+### 画像処理エラー
+- `process_image()`メソッドの例外処理確認
+- 入力画像の形式確認
+
+## 変革の成果
+
+### Before (元のコード)
+- **main.py**: 1865行の巨大ファイル
+- **保守性**: 機能追加が困難、コード重複多数
+- **拡張性**: 新機能追加で既存コードに影響
+- **可読性**: 機能が混在、責任分離不明確
+
+### After (プラグインシステム + モジュラー設計)
+- **main_plugin.py**: ~320行の軽量メインアプリ
+- **4個のプラグイン**: 機能別完全分離
+- **3個のモジュール**: editor/ui/utils責任分担
+- **統一API**: 一貫したインターフェース
+- **モジュラー設計**: 独立開発・テスト可能
+
+### アーキテクチャの改善
+```
+【旧構造】
+main.py (1865行)
+└── すべての機能が混在
+
+【新構造】  
+main_plugin.py (320行)
+├── editor/ (画像処理)
+├── ui/ (インターフェース)
+├── utils/ (ヘルパー)
+├── core/ (プラグインベース)
+└── plugins/ (4個の専門プラグイン)
+```
+
+## 今後の拡張ロードマップ
+
+1. **外部プラグインサポート**: 独立パッケージとしてのプラグイン配布
+2. **プラグインストア**: 動的ダウンロード・インストール機能
+3. **AI画像処理プラグイン**: 機械学習ベースの高度処理
+4. **リアルタイム処理**: GPU加速・並列処理最適化
+5. **クラウド連携**: オンラインプラグインレポジトリ
 
 ## 技術スタック
 
@@ -20,51 +341,10 @@
 - **OpenCV**: 画像処理ライブラリ
 - **Pillow**: Python画像処理ライブラリ
 - **NumPy**: 数値計算ライブラリ
-- **image_gui_template**: ベースGUIライブラリ
+- **Matplotlib**: データ可視化ライブラリ
 
-## プロジェクト構造
+---
 
-```
-ImageEditor/
-├── src/                     # ソースコード
-│   ├── main.py             # メインアプリケーション
-│   ├── editor/             # 画像編集機能
-│   ├── ui/                 # UIコンポーネント
-│   └── utils/              # ユーティリティ
-├── assets/                 # アセット
-├── config/                 # 設定ファイル
-├── tests/                  # テストコード
-├── requirements.txt        # 依存関係
-└── setup.py               # パッケージ設定
-```
-
-## インストール
-
-### 1. 依存ライブラリのインストール
-
-```bash
-# image_gui_templateライブラリをローカルインストール
-pip install -e /Users/tinoue/Development.local/lib/image_gui_template
-
-# その他の依存関係
-pip install -r requirements.txt
-```
-
-### 2. アプリケーションの実行
-
-```bash
-python src/main.py
-```
-
-## 開発
-
-このプロジェクトは image_gui_template ライブラリの以下のコンポーネントを活用します：
-
-- `apps.gui_image_processor`: 画像処理アプリケーションベース
-- `launchers`: アプリケーション起動システム
-- カスタムウィジェットとレイアウト
-- 設定管理システム
-
-## ライセンス
-
-MIT License
+**作成者**: GitHub Copilot + プラグインシステム設計  
+**バージョン**: Plugin System 1.0.0  
+**最終更新**: 2025年9月13日
