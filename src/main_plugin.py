@@ -7,8 +7,9 @@ Advanced Image Editor - Plugin System Version
 1865行だったmain.pyをプラグインシステムで分割・整理した高度な画像編集アプリケーション。
 モジュラー設計により保守性・拡張性・可読性を大幅に向上。
 
+
 【実行方法】
-cd /Users/tinoue/Development.local/app/advanced-image-editor
+cd <本リポジトリのクローン先ディレクトリ>
 .venv/bin/python3 src/main_plugin.py
 
 【詳細ドキュメント】
@@ -407,11 +408,11 @@ if __name__ == "__main__":
     def load_default_image(self):
         """デフォルト画像を読み込み"""
         try:
-            # デフォルト画像パスを探索
+            # デフォルト画像パスを探索（環境非依存の相対パスに変更）
             default_paths = [
-                "/Users/tinoue/Development.local/app/Image/AutoFocus/IMG_1307.jpeg",
-                "/Users/tinoue/Development.local/app/Image/AutoFocus/IMG_1308.jpeg",
-                "assets/sample.jpg"
+                os.path.join("assets", "sample.jpg"),
+                os.path.join("SampleImage", "IMG_1307.jpeg"),
+                os.path.join("SampleImage", "IMG_1308.jpeg")
             ]
             
             for path in default_paths:

@@ -72,7 +72,7 @@ import os
 from pathlib import Path
 
 # libライブラリパスを追加
-lib_path = "/Users/tinoue/Development.local/lib"
+lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib"))
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
