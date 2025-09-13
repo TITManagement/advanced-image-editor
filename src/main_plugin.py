@@ -10,7 +10,8 @@ Advanced Image Editor - Plugin System Version
 
 【実行方法】
 cd <本リポジトリのクローン先ディレクトリ>
-.venv/bin/python3 src/main_plugin.py
+# macOS/Linux: .venv/bin/python src/main_plugin.py
+# Windows: .venv\\Scripts\\python.exe src\\main_plugin.py
 
 【詳細ドキュメント】
 プラグインの作成方法・API仕様・トラブルシューティングは README.md を参照してください。

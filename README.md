@@ -41,19 +41,79 @@ src/
 └── main_plugin.py          # 新プラグインシステム版 ⭐メイン
 ```
 
-## 実行方法
+## インストール方法
 
-### 推奨実行方法
+### 自動セットアップ（推奨）
+
+全プラットフォーム共通で以下のコマンドを実行：
+
 ```bash
-cd <本リポジトリのクローン先ディレクトリ>
-.venv/bin/python3 src/main_plugin.py
+# リポジトリをクローン
+git clone https://github.com/TITManagement/advanced-image-editor.git
+cd advanced-image-editor
+
+# 自動セットアップスクリプトを実行
+python setup.py
 ```
 
-### 仮想環境アクティベート後
+### 手動セットアップ
+
+#### 1. 仮想環境の作成
+
+```bash
+# macOS / Linux
+python3 -m venv .venv
+
+# Windows  
+python -m venv .venv
+```
+
+#### 2. 依存関係のインストール
+
+```bash
+# macOS / Linux
+.venv/bin/pip install -r requirements.txt
+
+# Windows
+.venv\Scripts\pip.exe install -r requirements.txt
+```
+
+## 実行方法
+
+### macOS / Linux (Ubuntu等)
+
+#### 推奨実行方法
+```bash
+cd <本リポジトリのクローン先ディレクトリ>
+.venv/bin/python src/main_plugin.py
+```
+
+#### 仮想環境アクティベート後
 ```bash
 cd <本リポジトリのクローン先ディレクトリ>
 source .venv/bin/activate
 python src/main_plugin.py
+```
+
+### Windows
+
+#### 推奨実行方法（PowerShell/コマンドプロンプト）
+```powershell
+cd <本リポジトリのクローン先ディレクトリ>
+.venv\Scripts\python.exe src\main_plugin.py
+```
+
+#### 仮想環境アクティベート後
+```powershell
+# PowerShell
+cd <本リポジトリのクローン先ディレクトリ>
+.venv\Scripts\Activate.ps1
+python src\main_plugin.py
+
+# コマンドプロンプト
+cd <本リポジトリのクローン先ディレクトリ>
+.venv\Scripts\activate.bat
+python src\main_plugin.py
 ```
 
 ## 利用可能なプラグイン
@@ -336,12 +396,25 @@ main_plugin.py (320行)
 
 ## 技術スタック
 
-- **Python 3.8+**
+- **Python 3.8+** (Cross-Platform Compatible)
 - **CustomTkinter**: モダンなGUIフレームワーク
 - **OpenCV**: 画像処理ライブラリ
 - **Pillow**: Python画像処理ライブラリ
 - **NumPy**: 数値計算ライブラリ
 - **Matplotlib**: データ可視化ライブラリ
+
+### 対応プラットフォーム
+
+- **macOS** 10.14+ (Mojave以降)
+- **Windows** 10/11 (64-bit)
+- **Linux** (Ubuntu 18.04+, その他ディストリビューション)
+
+### システム要件
+
+- **Python**: 3.8以上
+- **メモリ**: 4GB以上推奨
+- **ディスク容量**: 500MB以上の空き容量
+- **ディスプレイ**: 1024x768以上の解像度
 
 ---
 

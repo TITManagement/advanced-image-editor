@@ -97,11 +97,13 @@ class ImageEditor:
             # 現在のスクリプトディレクトリを基準にした相対パス
             script_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             
-            # デフォルト画像パスを探索（SampleImageディレクトリを優先）
+            # デフォルト画像パスを探索（クロスプラットフォーム対応）
             default_paths = [
                 os.path.join(script_dir, "SampleImage", "IMG_1307.jpeg"),
+                os.path.join(script_dir, "SampleImage", "IMG_1308.jpeg"),
                 # フォールバック用：プロジェクトルートからの相対パス
-                "SampleImage/IMG_1307.jpeg"
+                os.path.join("SampleImage", "IMG_1307.jpeg"),
+                os.path.join("SampleImage", "IMG_1308.jpeg")
             ]
             
             for path in default_paths:
