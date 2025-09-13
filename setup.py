@@ -80,6 +80,28 @@ def create_venv():
         print(f"❌ 仮想環境作成エラー: {e}")
         return False
 
+def setup_gui_framework_path():
+    """gui_frameworkライブラリのパスをセットアップ"""
+    try:
+        # プロジェクトルートから相対パスでgui_frameworkを探索
+        project_root = Path(__file__).parent
+        gui_framework_paths = [
+            project_root / ".." / ".." / "lib" / "gui_framework",  # ../../lib/gui_framework
+            project_root / ".." / "lib" / "gui_framework",        # ../lib/gui_framework  
+            project_root / "lib" / "gui_framework",               # ./lib/gui_framework
+        ]
+        
+        for gui_path in gui_framework_paths:
+            if gui_path.exists() and (gui_path / "__init__.py").exists():
+                print(f"✅ gui_framework発見: {gui_path.relative_to(project_root)}")
+                return str(gui_path.parent.resolve())
+        
+        print("⚠️ gui_frameworkが見つかりません。基本機能のみで動作します。")
+        return None
+    except Exception as e:
+        print(f"⚠️ gui_frameworkパス設定エラー: {e}")
+        return None
+
 def install_dependencies():
     """依存関係をインストール"""
     platform_info = get_platform_info()
@@ -104,6 +126,16 @@ def install_dependencies():
         
         # requirements.txtから依存関係をインストール
         subprocess.run([str(venv_python), "-m", "pip", "install", "-r", "requirements.txt"], check=True)
+        
+        # gui_frameworkパスをセットアップ
+        gui_lib_path = setup_gui_framework_path()
+        if gui_lib_path:
+            # gui_frameworkを開発モードでインストール（オプション）
+            gui_framework_path = Path(gui_lib_path) / "gui_framework"
+            if gui_framework_path.exists():
+                print("🔧 gui_frameworkを開発モードでインストール中...")
+                subprocess.run([str(venv_python), "-m", "pip", "install", "-e", str(gui_framework_path)], 
+                             check=False)  # エラーでも継続
         
         print("✅ 依存関係インストール完了")
         return True

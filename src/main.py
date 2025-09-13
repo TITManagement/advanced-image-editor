@@ -72,9 +72,30 @@ import os
 from pathlib import Path
 
 # libライブラリパスを追加
-lib_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib"))
-if lib_path not in sys.path:
+# libライブラリパスを相対パスで設定
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+
+# gui_frameworkライブラリのパスを相対的に探索
+potential_lib_paths = [
+    os.path.join(project_root, "..", "..", "lib"),  # ../../lib
+    os.path.join(project_root, "..", "lib"),        # ../lib
+    os.path.join(project_root, "lib"),              # ./lib
+]
+
+lib_path = None
+for path in potential_lib_paths:
+    abs_path = os.path.abspath(path)
+    gui_framework_path = os.path.join(abs_path, "gui_framework")
+    if os.path.exists(gui_framework_path) and os.path.exists(os.path.join(gui_framework_path, "__init__.py")):
+        lib_path = abs_path
+        print(f"✅ gui_frameworkライブラリ発見: {path}")
+        break
+
+if lib_path and lib_path not in sys.path:
     sys.path.insert(0, lib_path)
+elif lib_path is None:
+    print("⚠️ gui_frameworkライブラリが見つかりません。基本機能のみで動作します。")
 
 # 標準ライブラリからインポート
 try:

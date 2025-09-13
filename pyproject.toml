@@ -54,3 +54,10 @@ include = ["src*"]
 # Cross-platform compatibility settings
 [tool.setuptools]
 platforms = ["any"]
+
+# Development dependencies for gui_framework
+[project.optional-dependencies]
+dev = [
+    # gui_frameworkライブラリの開発依存関係
+    # ローカルライブラリは相対パスで自動検出
+]

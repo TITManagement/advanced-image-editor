@@ -43,6 +43,15 @@ src/
 
 ## インストール方法
 
+### 前提条件
+
+このプロジェクトは外部ライブラリ`gui_framework`に依存しています。  
+`gui_framework`は以下のいずれかの場所に配置してください：
+
+- `../../lib/gui_framework` (推奨)
+- `../lib/gui_framework`
+- `./lib/gui_framework`
+
 ### 自動セットアップ（推奨）
 
 全プラットフォーム共通で以下のコマンドを実行：
@@ -52,13 +61,22 @@ src/
 git clone https://github.com/TITManagement/advanced-image-editor.git
 cd advanced-image-editor
 
-# 自動セットアップスクリプトを実行
+# 自動セットアップスクリプトを実行（gui_frameworkパスも自動検出）
 python setup.py
 ```
 
 ### 手動セットアップ
 
-#### 1. 仮想環境の作成
+#### 1. gui_frameworkライブラリの配置確認
+
+```bash
+# gui_frameworkが正しい場所にあることを確認
+ls ../../lib/gui_framework/__init__.py
+# または
+ls ../lib/gui_framework/__init__.py
+```
+
+#### 2. 仮想環境の作成
 
 ```bash
 # macOS / Linux
@@ -68,7 +86,7 @@ python3 -m venv .venv
 python -m venv .venv
 ```
 
-#### 2. 依存関係のインストール
+#### 3. 依存関係のインストール
 
 ```bash
 # macOS / Linux
