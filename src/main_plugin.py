@@ -410,7 +410,6 @@ if __name__ == "__main__":
         try:
             # デフォルト画像パスを探索（環境非依存の相対パスに変更）
             default_paths = [
-                os.path.join("assets", "sample.jpg"),
                 os.path.join("SampleImage", "IMG_1307.jpeg"),
                 os.path.join("SampleImage", "IMG_1308.jpeg")
             ]
