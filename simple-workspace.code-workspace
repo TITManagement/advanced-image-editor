@@ -1,0 +1,20 @@
+{
+    "folders": [
+        {
+            "name": "🎨 Advanced Image Editor",
+            "path": "."
+        },
+        {
+            "name": "🖼️ GUI Framework",
+            "path": "../../lib/gui_framework"
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "./.venv/bin/python",
+        "python.analysis.extraPaths": [
+            "./src",
+            "../../lib/gui_framework",
+            "../../lib"
+        ]
+    }
+}

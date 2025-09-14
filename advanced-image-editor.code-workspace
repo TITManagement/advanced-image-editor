@@ -1,0 +1,109 @@
+{
+    "folders": [
+        {
+            "name": "🎨 Advanced Image Editor",
+            "path": "."
+        },
+        {
+            "name": "🖼️ GUI Framework (Lib)",
+            "path": "../../lib/gui_framework"
+        },
+        {
+            "name": "📷 Camera Modules (Lib)", 
+            "path": "../../lib/camera_modules"
+        },
+        {
+            "name": "🔍 QR Camera Matcher",
+            "path": "../qr-camera-matcher"
+        }
+    ],
+    "settings": {
+        "python.defaultInterpreterPath": "./advanced-image-editor/.venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "python.analysis.extraPaths": [
+            "./advanced-image-editor/src",
+            "../../lib/gui_framework",
+            "../../lib"
+        ],
+        "files.exclude": {
+            "**/__pycache__": true,
+            "**/*.pyc": true,
+            "**/node_modules": true,
+            "**/.DS_Store": true
+        },
+        "search.exclude": {
+            "**/venv": true,
+            "**/.venv": true,
+            "**/node_modules": true,
+            "**/__pycache__": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "ms-python.python",
+            "ms-python.pylint",
+            "ms-python.black-formatter",
+            "ms-toolsai.jupyter",
+            "ms-vscode.vscode-json"
+        ]
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "🎨 Advanced Image Editor (Plugin)",
+                "type": "debugpy",
+                "request": "launch",
+                "program": "${workspaceFolder}/src/main_plugin.py",
+                "console": "integratedTerminal",
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src:../../lib"
+                }
+            },
+            {
+                "name": "🎨 Advanced Image Editor (Main)",
+                "type": "debugpy",
+                "request": "launch", 
+                "program": "${workspaceFolder}/src/main.py",
+                "console": "integratedTerminal",
+                "cwd": "${workspaceFolder}",
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src:../../lib"
+                }
+            }
+        ]
+    },
+    "tasks": {
+        "version": "2.0.0",
+        "tasks": [
+            {
+                "label": "🧪 Run Phase 0 Verification",
+                "type": "shell",
+                "command": "${workspaceFolder}/.venv/bin/python",
+                "args": ["scripts/verify_phase0.py"],
+                "group": "test",
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": false,
+                    "panel": "shared"
+                },
+                "problemMatcher": []
+            },
+            {
+                "label": "🚀 Launch Image Editor (Plugin)",
+                "type": "shell",
+                "command": "${workspaceFolder}/.venv/bin/python",
+                "args": ["src/main_plugin.py"],
+                "group": "build",
+                "presentation": {
+                    "echo": true,
+                    "reveal": "always",
+                    "focus": true,
+                    "panel": "shared"
+                }
+            }
+        ]
+    }
+}
