@@ -1,0 +1,1 @@
+# Contracts package - Schema definitions and API contracts

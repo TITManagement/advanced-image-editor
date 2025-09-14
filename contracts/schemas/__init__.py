@@ -1,0 +1,1 @@
+# Schema definitions package - Pydantic models for data validation
