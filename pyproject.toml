@@ -1,7 +1,7 @@
 [project]
 name = "advanced-image-editor"
-version = "1.0.0"
-description = "Advanced Image Editor with Plugin System - プラグインシステム対応の高度な画像編集アプリケーション"
+version = "1.1.0"
+description = "Advanced Image Editor with Plugin System - カーブエディタ完全1:1マッピング対応の高度な画像編集アプリケーション"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
