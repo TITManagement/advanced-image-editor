@@ -1,0 +1,17 @@
+# 基本依存関係（必須）
+numpy>=1.24.0
+opencv-python>=4.8.0
+customtkinter>=5.2.0
+Pillow>=10.0.0
+scipy>=1.11.0
+
+# オプション依存関係（追加機能用）
+# 以下のパッケージをインストールすることで追加機能が利用可能になります
+
+# matplotlib: グラフ描画機能（画像解析プラグインのヒストグラム表示）
+# インストール: pip install matplotlib
+# matplotlib>=3.7.0
+
+# gui_framework: 高度なダイアログ機能
+# インストール: pip install gui_framework
+# gui_framework>=1.0.0

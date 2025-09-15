@@ -11,17 +11,17 @@ from PIL import Image
 import customtkinter as ctk
 from typing import Dict, Any
 
-# matplotlib（オプション）
+# matplotlib（オプション機能：グラフ描画）
 try:
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     import matplotlib
     matplotlib.use('TkAgg')
     MATPLOTLIB_AVAILABLE = True
-    print("✅ matplotlib ライブラリのインポートが完了しました")
-except ImportError as e:
-    print(f"⚠️ matplotlib インポート警告: {e}")
-    print("📦 基本機能のみで動作します。matplotlibなしで継続...")
+    print("✅ matplotlib ライブラリ利用可能 - グラフ描画機能が有効です")
+except ImportError:
+    print("ℹ️ matplotlib未インストール - グラフ描画機能は無効（基本機能は利用可能）")
+    print("   追加機能を利用したい場合：pip install matplotlib")
     MATPLOTLIB_AVAILABLE = False
 
 # 相対インポートでcore moduleを使用
@@ -41,6 +41,21 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
         self.show_histogram = False
         self.current_analysis_result = None
         
+        # 個別機能の状態追跡
+        self.applied_histogram = False
+        self.applied_features = None
+        self.applied_frequency = None
+        self.applied_blur_detection = False
+        self.applied_noise_analysis = False
+        
+        # 画像バックアップシステム
+        self.backup_image = None           # 処理前の画像をバックアップ
+        self.features_backup = None        # 特徴点検出処理前のバックアップ
+        self.frequency_backup = None       # 周波数解析処理前のバックアップ
+        self.blur_backup = None            # ブラー検出処理前のバックアップ
+        self.noise_backup = None           # ノイズ解析処理前のバックアップ
+        self.histogram_backup = None       # ヒストグラム表示処理前のバックアップ
+        
     def get_display_name(self) -> str:
         return "画像解析"
     
@@ -56,12 +71,26 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
         
         ctk.CTkLabel(histogram_frame, text="ヒストグラム解析", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
         
-        # ヒストグラム表示ボタン
+        # ヒストグラム表示セクション
+        histogram_section = ctk.CTkFrame(histogram_frame)
+        histogram_section.pack(fill="x", padx=5, pady=3)
+        
         self._buttons['histogram'] = PluginUIHelper.create_button(
-            histogram_frame,
+            histogram_section,
             text="ヒストグラム表示",
-            command=self._show_histogram_analysis
+            command=self._show_histogram_analysis,
+            width=120
         )
+        self._buttons['histogram'].pack(side="left", padx=(0, 5))
+        
+        self._buttons['undo_histogram'] = PluginUIHelper.create_button(
+            histogram_section,
+            text="🔄 取消",
+            command=self._undo_histogram,
+            width=60
+        )
+        self._buttons['undo_histogram'].pack(side="left")
+        self._buttons['undo_histogram'].configure(state="disabled")
         
         # 特徴点検出セクション
         feature_frame = ctk.CTkFrame(parent)
@@ -73,19 +102,47 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
         feature_buttons_frame = ctk.CTkFrame(feature_frame)
         feature_buttons_frame.pack(fill="x", padx=5, pady=5)
         
+        # SIFT特徴点セクション
+        sift_section = ctk.CTkFrame(feature_buttons_frame)
+        sift_section.pack(fill="x", pady=3)
+        
         self._buttons['sift'] = PluginUIHelper.create_button(
-            feature_buttons_frame,
+            sift_section,
             text="SIFT特徴点",
             command=lambda: self._apply_feature_detection("sift"),
             width=100
         )
+        self._buttons['sift'].pack(side="left", padx=(0, 5))
+        
+        self._buttons['undo_sift'] = PluginUIHelper.create_button(
+            sift_section,
+            text="🔄 取消",
+            command=lambda: self._undo_features("sift"),
+            width=60
+        )
+        self._buttons['undo_sift'].pack(side="left")
+        self._buttons['undo_sift'].configure(state="disabled")
+        
+        # ORB特徴点セクション
+        orb_section = ctk.CTkFrame(feature_buttons_frame)
+        orb_section.pack(fill="x", pady=3)
         
         self._buttons['orb'] = PluginUIHelper.create_button(
-            feature_buttons_frame,
+            orb_section,
             text="ORB特徴点",
             command=lambda: self._apply_feature_detection("orb"),
             width=100
         )
+        self._buttons['orb'].pack(side="left", padx=(0, 5))
+        
+        self._buttons['undo_orb'] = PluginUIHelper.create_button(
+            orb_section,
+            text="🔄 取消",
+            command=lambda: self._undo_features("orb"),
+            width=60
+        )
+        self._buttons['undo_orb'].pack(side="left")
+        self._buttons['undo_orb'].configure(state="disabled")
         
         # 周波数解析セクション
         frequency_frame = ctk.CTkFrame(parent)
@@ -97,19 +154,47 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
         freq_buttons_frame = ctk.CTkFrame(frequency_frame)
         freq_buttons_frame.pack(fill="x", padx=5, pady=5)
         
+        # フーリエ変換セクション
+        fft_section = ctk.CTkFrame(freq_buttons_frame)
+        fft_section.pack(fill="x", pady=3)
+        
         self._buttons['fft'] = PluginUIHelper.create_button(
-            freq_buttons_frame,
+            fft_section,
             text="フーリエ変換",
             command=lambda: self._apply_frequency_analysis("fft"),
             width=100
         )
+        self._buttons['fft'].pack(side="left", padx=(0, 5))
+        
+        self._buttons['undo_fft'] = PluginUIHelper.create_button(
+            fft_section,
+            text="🔄 取消",
+            command=lambda: self._undo_frequency("fft"),
+            width=60
+        )
+        self._buttons['undo_fft'].pack(side="left")
+        self._buttons['undo_fft'].configure(state="disabled")
+        
+        # DCT変換セクション
+        dct_section = ctk.CTkFrame(freq_buttons_frame)
+        dct_section.pack(fill="x", pady=3)
         
         self._buttons['dct'] = PluginUIHelper.create_button(
-            freq_buttons_frame,
+            dct_section,
             text="DCT変換",
             command=lambda: self._apply_frequency_analysis("dct"),
             width=100
         )
+        self._buttons['dct'].pack(side="left", padx=(0, 5))
+        
+        self._buttons['undo_dct'] = PluginUIHelper.create_button(
+            dct_section,
+            text="🔄 取消",
+            command=lambda: self._undo_frequency("dct"),
+            width=60
+        )
+        self._buttons['undo_dct'].pack(side="left")
+        self._buttons['undo_dct'].configure(state="disabled")
         
         # 画像品質解析セクション
         quality_frame = ctk.CTkFrame(parent)
@@ -117,56 +202,186 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
         
         ctk.CTkLabel(quality_frame, text="画像品質解析", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
         
+        # ブラー検出セクション
+        blur_section = ctk.CTkFrame(quality_frame)
+        blur_section.pack(fill="x", padx=5, pady=3)
+        
         self._buttons['blur_detect'] = PluginUIHelper.create_button(
-            quality_frame,
+            blur_section,
             text="ブラー検出",
-            command=self._detect_blur
+            command=self._detect_blur,
+            width=100
         )
+        self._buttons['blur_detect'].pack(side="left", padx=(0, 5))
+        
+        self._buttons['undo_blur'] = PluginUIHelper.create_button(
+            blur_section,
+            text="🔄 取消",
+            command=self._undo_blur,
+            width=60
+        )
+        self._buttons['undo_blur'].pack(side="left")
+        self._buttons['undo_blur'].configure(state="disabled")
+        
+        # ノイズ解析セクション
+        noise_section = ctk.CTkFrame(quality_frame)
+        noise_section.pack(fill="x", padx=5, pady=3)
         
         self._buttons['noise_detect'] = PluginUIHelper.create_button(
-            quality_frame,
+            noise_section,
             text="ノイズ解析",
-            command=self._analyze_noise
+            command=self._analyze_noise,
+            width=100
         )
+        self._buttons['noise_detect'].pack(side="left", padx=(0, 5))
         
-        # リセットボタン
-        self._buttons['reset'] = PluginUIHelper.create_button(
-            parent,
-            text="リセット",
-            command=self.reset_parameters
+        self._buttons['undo_noise'] = PluginUIHelper.create_button(
+            noise_section,
+            text="🔄 取消",
+            command=self._undo_noise,
+            width=60
         )
+        self._buttons['undo_noise'].pack(side="left")
+        self._buttons['undo_noise'].configure(state="disabled")
     
     def _show_histogram_analysis(self) -> None:
         """ヒストグラム解析を表示"""
+        self.applied_histogram = True
         print("📊 ヒストグラム解析実行")
+        
+        # undoボタンを有効化
+        self._enable_undo_button("undo_histogram")
+        
         if hasattr(self, 'histogram_callback'):
             self.histogram_callback()
+    
+    def _undo_histogram(self) -> None:
+        """ヒストグラム表示のundo"""
+        print("🔄 ヒストグラム表示取消")
+        
+        # 状態をリセット
+        self.applied_histogram = False
+        
+        # undoボタンを無効化
+        self._disable_undo_button("undo_histogram")
+        
+        # コールバックがあれば実行
+        if hasattr(self, 'undo_histogram_callback'):
+            self.undo_histogram_callback()
     
     def _apply_feature_detection(self, feature_type: str) -> None:
         """特徴点検出実行"""
         self.analysis_type = feature_type
+        self.applied_features = feature_type
         print(f"🎯 特徴点検出実行: {feature_type}")
+        
+        # undoボタンを有効化
+        self._enable_undo_button(f"undo_{feature_type}")
+        
         if hasattr(self, 'feature_callback'):
             self.feature_callback(feature_type)
     
     def _apply_frequency_analysis(self, analysis_type: str) -> None:
         """周波数解析実行"""
         self.analysis_type = analysis_type
-        print(f"� 周波数解析実行: {analysis_type}")
+        self.applied_frequency = analysis_type
+        print(f"📊 周波数解析実行: {analysis_type}")
+        
+        # undoボタンを有効化
+        self._enable_undo_button(f"undo_{analysis_type}")
+        
         if hasattr(self, 'frequency_callback'):
             self.frequency_callback(analysis_type)
     
     def _detect_blur(self) -> None:
         """ブラー検出実行"""
-        print("� ブラー検出実行")
+        self.applied_blur_detection = True
+        print("🔍 ブラー検出実行")
+        
+        # undoボタンを有効化
+        self._enable_undo_button("undo_blur")
+        
         if hasattr(self, 'blur_callback'):
             self.blur_callback()
     
     def _analyze_noise(self) -> None:
         """ノイズ解析実行"""
+        self.applied_noise_analysis = True
         print("📈 ノイズ解析実行")
+        
+        # undoボタンを有効化
+        self._enable_undo_button("undo_noise")
+        
         if hasattr(self, 'noise_callback'):
             self.noise_callback()
+    
+    def _enable_undo_button(self, button_name: str) -> None:
+        """undoボタンを有効化"""
+        if button_name in self._buttons:
+            self._buttons[button_name].configure(state="normal")
+    
+    def _disable_undo_button(self, button_name: str) -> None:
+        """undoボタンを無効化"""
+        if button_name in self._buttons:
+            self._buttons[button_name].configure(state="disabled")
+    
+    def _undo_features(self, feature_type: str) -> None:
+        """特徴点検出のundo"""
+        print(f"🔄 特徴点検出取消: {feature_type}")
+        
+        # 状態をリセット
+        self.applied_features = None
+        self.analysis_type = "none"
+        
+        # undoボタンを無効化
+        self._disable_undo_button(f"undo_{feature_type}")
+        
+        # コールバックがあれば実行
+        if hasattr(self, 'undo_features_callback'):
+            self.undo_features_callback(feature_type)
+    
+    def _undo_frequency(self, analysis_type: str) -> None:
+        """周波数解析のundo"""
+        print(f"🔄 周波数解析取消: {analysis_type}")
+        
+        # 状態をリセット
+        self.applied_frequency = None
+        self.analysis_type = "none"
+        
+        # undoボタンを無効化
+        self._disable_undo_button(f"undo_{analysis_type}")
+        
+        # コールバックがあれば実行
+        if hasattr(self, 'undo_frequency_callback'):
+            self.undo_frequency_callback(analysis_type)
+    
+    def _undo_blur(self) -> None:
+        """ブラー検出のundo"""
+        print(f"🔄 ブラー検出取消")
+        
+        # 状態をリセット
+        self.applied_blur_detection = False
+        
+        # undoボタンを無効化
+        self._disable_undo_button("undo_blur")
+        
+        # コールバックがあれば実行
+        if hasattr(self, 'undo_blur_callback'):
+            self.undo_blur_callback()
+    
+    def _undo_noise(self) -> None:
+        """ノイズ解析のundo"""
+        print(f"🔄 ノイズ解析取消")
+        
+        # 状態をリセット
+        self.applied_noise_analysis = False
+        
+        # undoボタンを無効化
+        self._disable_undo_button("undo_noise")
+        
+        # コールバックがあれば実行
+        if hasattr(self, 'undo_noise_callback'):
+            self.undo_noise_callback()
     
     def set_histogram_callback(self, callback):
         """ヒストグラム解析用のコールバックを設定"""
@@ -187,6 +402,26 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
     def set_noise_callback(self, callback):
         """ノイズ解析用のコールバックを設定"""
         self.noise_callback = callback
+    
+    def set_undo_features_callback(self, callback):
+        """特徴点検出undo用のコールバックを設定"""
+        self.undo_features_callback = callback
+    
+    def set_undo_frequency_callback(self, callback):
+        """周波数解析undo用のコールバックを設定"""
+        self.undo_frequency_callback = callback
+    
+    def set_undo_blur_callback(self, callback):
+        """ブラー検出undo用のコールバックを設定"""
+        self.undo_blur_callback = callback
+    
+    def set_undo_noise_callback(self, callback):
+        """ノイズ解析undo用のコールバックを設定"""
+        self.undo_noise_callback = callback
+    
+    def set_undo_histogram_callback(self, callback):
+        """ヒストグラム表示undo用のコールバックを設定"""
+        self.undo_histogram_callback = callback
     
     def process_image(self, image: Image.Image, **params) -> Image.Image:
         """画像解析を適用（通常の処理では使用しない）"""
@@ -252,8 +487,18 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
                 magnitude_spectrum = (magnitude_spectrum - magnitude_spectrum.min()) / (magnitude_spectrum.max() - magnitude_spectrum.min()) * 255
                 
             elif analysis_type == "dct":
-                # DCT変換
-                dct_result = cv2.dct(np.float32(gray_image))
+                # DCT変換（2D DCT）
+                # OpenCVのdctは1D用なので、scipyまたは手動実装を使用
+                try:
+                    # NumPyを使った簡易2D DCT実装
+                    from scipy.fft import dct
+                    # 各行と各列に対してDCTを適用
+                    dct_result = dct(dct(gray_image.T, norm='ortho').T, norm='ortho')
+                except ImportError:
+                    # scipyが利用できない場合、フーリエ変換の実部を使用
+                    f_transform = np.fft.fft2(gray_image)
+                    dct_result = np.real(f_transform)
+                
                 magnitude_spectrum = np.log(np.abs(dct_result) + 1)
                 
                 # 正規化
@@ -347,14 +592,6 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
         except Exception as e:
             print(f"❌ ノイズ解析エラー: {e}")
             return image
-    
-    def reset_parameters(self) -> None:
-        """パラメータをリセット"""
-        print(f"🔄 画像解析パラメータリセット")
-        super().reset_parameters()
-        self.analysis_type = "none"
-        self.show_histogram = False
-        self.current_analysis_result = None
     
     def get_parameters(self) -> Dict[str, Any]:
         """現在のパラメータを取得"""

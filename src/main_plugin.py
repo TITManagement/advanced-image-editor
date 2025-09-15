@@ -34,6 +34,7 @@ try:
     from tkinter import filedialog, messagebox
     import os
     import sys
+    import argparse
     print("✅ 必要なライブラリのインポートが完了しました")
 except ImportError as e:
     print(f"❌ ライブラリのインポートエラー: {e}")
@@ -41,19 +42,26 @@ except ImportError as e:
     print("pip install customtkinter opencv-python numpy pillow")
     sys.exit(1)
 
-# gui_frameworkライブラリのインポート（オプション）
+# ログシステムのインポート
+from core.logging import (
+    LogLevel, 
+    set_log_level, 
+    get_log_level,
+    debug_print, 
+    info_print, 
+    warning_print, 
+    error_print, 
+    critical_print
+)
+
+# GUI framework（オプション機能：高度なUI）
 try:
-    from gui_framework.core import FontManager, StyleManager, ImageUtils
-    from gui_framework.widgets import ScalableLabel, StyledButton
-    from gui_framework.widgets.dialogs import MessageDialog, TaskRunner
-    print("✅ gui_framework ライブラリのインポートが完了しました")
-    GUI_FRAMEWORK_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️ gui_framework インポート警告: {e}")
-    print("📦 基本機能のみで動作します。gui_frameworkなしで継続...")
-    GUI_FRAMEWORK_AVAILABLE = False
-    
-    # gui_frameworkが利用できない場合の代替クラス
+    from gui_framework.widgets.dialogs import MessageDialog
+    print("✅ gui_framework ライブラリ利用可能 - 高度なダイアログ機能が有効です")
+except ImportError:
+    print("ℹ️ gui_framework未インストール - 標準ダイアログを使用（基本機能は利用可能）")
+    # フォールバック用の基本MessageDialog
+    from tkinter import messagebox
     class MessageDialog:
         @staticmethod
         def show_error(parent, title, message):
@@ -130,7 +138,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
         # コントロールボタンのセットアップ
         self.setup_control_buttons()
         
-        print("✅ Advanced Image Editor (Plugin Version) が起動しました")
+        info_print("Advanced Image Editor (Plugin Version) が起動しました")
         
         # デフォルト画像を読み込み
         self.image_editor.load_default_image()
@@ -160,38 +168,170 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
     
     def setup_plugins(self):
         """プラグインを登録・初期化"""
-        print("🔌 プラグインを登録中...")
+        info_print("プラグインを登録中...")
         
-        # 基本調整プラグイン
-        basic_plugin = BasicAdjustmentPlugin()
-        basic_plugin.set_parameter_change_callback(self.on_plugin_parameter_change)
-        self.plugin_manager.register_plugin(basic_plugin)
+        # プラグイン設定定義（メンテナンス性向上）
+        plugin_configs = [
+            {
+                'name': 'basic_adjustment',
+                'class': BasicAdjustmentPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
+                }
+            },
+            {
+                'name': 'density_adjustment', 
+                'class': DensityAdjustmentPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
+                    'histogram': self.apply_histogram_equalization,
+                    'threshold': self.apply_binary_threshold,
+                }
+            },
+            {
+                'name': 'filter_processing',
+                'class': FilterProcessingPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
+                    'special_filter': self.apply_special_filter,
+                    'morphology': self.apply_morphology_operation,
+                    'contour': self.apply_contour_detection,
+                    'undo_special_filter': self.undo_special_filter,
+                    'undo_morphology': self.undo_morphology_operation,
+                    'undo_contour': self.undo_contour_detection,
+                }
+            },
+            {
+                'name': 'image_analysis',
+                'class': ImageAnalysisPlugin,
+                'callbacks': {
+                    'histogram': self.show_histogram_analysis,
+                    'feature': self.apply_feature_detection,
+                    'frequency': self.apply_frequency_analysis,
+                    'blur': self.detect_blur,
+                    'noise': self.analyze_noise,
+                    'undo_features': self.undo_feature_detection,
+                    'undo_frequency': self.undo_frequency_analysis,
+                    'undo_blur': self.undo_blur_detection,
+                    'undo_noise': self.undo_noise_analysis,
+                    'undo_histogram': self.undo_histogram_analysis,
+                }
+            }
+        ]
         
-        # 濃度調整プラグイン
-        density_plugin = DensityAdjustmentPlugin()
-        density_plugin.set_parameter_change_callback(self.on_plugin_parameter_change)
-        density_plugin.set_histogram_callback(self.apply_histogram_equalization)
-        density_plugin.set_threshold_callback(self.apply_binary_threshold)
-        self.plugin_manager.register_plugin(density_plugin)
+        # プラグインを一括登録
+        self._register_plugins_from_config(plugin_configs)
         
-        # フィルター処理プラグイン
-        filter_plugin = FilterProcessingPlugin()
-        filter_plugin.set_parameter_change_callback(self.on_plugin_parameter_change)
-        filter_plugin.set_special_filter_callback(self.apply_special_filter)
-        filter_plugin.set_morphology_callback(self.apply_morphology_operation)
-        filter_plugin.set_contour_callback(self.apply_contour_detection)
-        self.plugin_manager.register_plugin(filter_plugin)
+        info_print(f"{len(self.plugin_manager.plugins)}個のプラグインが登録されました")
+    
+    def _register_plugins_from_config(self, plugin_configs):
+        """プラグイン設定から一括登録（メンテナンス性向上）"""
+        successful_plugins = 0
+        failed_plugins = []
         
-        # 画像解析プラグイン（旧：高度処理プラグイン）
-        analysis_plugin = ImageAnalysisPlugin()
-        analysis_plugin.set_histogram_callback(self.show_histogram_analysis)
-        analysis_plugin.set_feature_callback(self.apply_feature_detection)
-        analysis_plugin.set_frequency_callback(self.apply_frequency_analysis)
-        analysis_plugin.set_blur_callback(self.detect_blur)
-        analysis_plugin.set_noise_callback(self.analyze_noise)
-        self.plugin_manager.register_plugin(analysis_plugin)
+        for config in plugin_configs:
+            try:
+                plugin_name = config['name']
+                plugin_class = config['class']
+                callbacks = config.get('callbacks', {})
+                
+                debug_print(f"   🔌 {plugin_name} プラグインを初期化中...")
+                
+                # プラグインインスタンス作成
+                plugin_instance = plugin_class()
+                
+                # コールバック設定
+                self._setup_plugin_callbacks(plugin_instance, callbacks, plugin_name)
+                
+                # プラグインマネージャーに登録
+                self.plugin_manager.register_plugin(plugin_instance)
+                
+                successful_plugins += 1
+                debug_print(f"   ✅ {plugin_name} プラグイン登録完了")
+                
+            except Exception as e:
+                failed_plugins.append({'name': plugin_name, 'error': str(e)})
+                error_print(f"{plugin_name} プラグイン登録失敗: {e}")
+                # プラグイン単体の失敗はアプリ全体を止めない
+                continue
         
-        print(f"✅ {len(self.plugin_manager.plugins)}個のプラグインが登録されました")
+        # 結果サマリー
+        if failed_plugins:
+            warning_print(f"{len(failed_plugins)}個のプラグインで問題が発生しましたが、アプリは継続実行されます")
+            for failed in failed_plugins:
+                warning_print(f"- {failed['name']}: {failed['error']}")
+        
+        debug_print(f"プラグイン登録結果: 成功={successful_plugins}, 失敗={len(failed_plugins)}")
+    
+    def _setup_plugin_callbacks(self, plugin_instance, callbacks, plugin_name):
+        """プラグインのコールバック設定（設定漏れ防止）"""
+        # コールバック設定のマッピング
+        callback_methods = {
+            'parameter_change': 'set_parameter_change_callback',
+            'histogram': 'set_histogram_callback', 
+            'threshold': 'set_threshold_callback',
+            'special_filter': 'set_special_filter_callback',
+            'morphology': 'set_morphology_callback',
+            'contour': 'set_contour_callback',
+            'feature': 'set_feature_callback',
+            'frequency': 'set_frequency_callback',
+            'blur': 'set_blur_callback',
+            'noise': 'set_noise_callback',
+            'undo_special_filter': 'set_undo_special_filter_callback',
+            'undo_morphology': 'set_undo_morphology_callback',
+            'undo_contour': 'set_undo_contour_callback',
+            'undo_features': 'set_undo_features_callback',
+            'undo_frequency': 'set_undo_frequency_callback',
+            'undo_blur': 'set_undo_blur_callback',
+            'undo_noise': 'set_undo_noise_callback',
+            'undo_histogram': 'set_undo_histogram_callback',
+        }
+        
+        # 各コールバックを設定
+        for callback_key, callback_function in callbacks.items():
+            if callback_key in callback_methods:
+                method_name = callback_methods[callback_key]
+                if hasattr(plugin_instance, method_name):
+                    try:
+                        getattr(plugin_instance, method_name)(callback_function)
+                        debug_print(f"     ✓ {callback_key} コールバック設定完了")
+                    except Exception as e:
+                        warning_print(f"{callback_key} コールバック設定失敗: {e}")
+                else:
+                    warning_print(f"{plugin_name}: {method_name} メソッドが見つかりません")
+            else:
+                warning_print(f"未知のコールバック設定: {callback_key}")
+        
+        # 設定検証（必要なコールバックがすべて設定されているかチェック）
+        self._validate_plugin_configuration(plugin_instance, callbacks, plugin_name)
+    
+    def _validate_plugin_configuration(self, plugin_instance, callbacks, plugin_name):
+        """プラグイン設定の検証（設定漏れ検出）"""
+        # プラグインタイプ別の必須コールバック定義
+        required_callbacks = {
+            'basic_adjustment': ['parameter_change'],
+            'density_adjustment': ['parameter_change', 'histogram', 'threshold'],
+            'filter_processing': [
+                'parameter_change', 'special_filter', 'morphology', 'contour',
+                'undo_special_filter', 'undo_morphology', 'undo_contour'
+            ],
+            'image_analysis': [
+                'histogram', 'feature', 'frequency', 'blur', 'noise',
+                'undo_features', 'undo_frequency', 'undo_blur', 'undo_noise', 'undo_histogram'
+            ]
+        }
+        
+        if plugin_name in required_callbacks:
+            required = set(required_callbacks[plugin_name])
+            configured = set(callbacks.keys())
+            
+            missing = required - configured
+            if missing:
+                warning_print(f"{plugin_name}: 未設定のコールバック = {missing}")
+            else:
+                debug_print(f"{plugin_name}: 全必須コールバック設定完了")
+        else:
+            debug_print(f"{plugin_name}: 検証定義がありません（カスタムプラグインの可能性）")
     
     def create_plugin_tabs(self):
         """プラグイン用のタブとUIを作成"""
@@ -208,34 +348,34 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
     
     def on_image_loaded(self):
         """画像読み込み完了時の処理"""
-        print("🔄 新しい画像読み込み: 全プラグインを初期化中...")
+        info_print("新しい画像読み込み: 全プラグインを初期化中...")
         self.reset_all_plugins()
-        print("✅ 全プラグイン初期化完了")
+        debug_print("全プラグイン初期化完了")
     
     def apply_all_adjustments(self):
         """全プラグインの調整を適用"""
         try:
             if not self.image_editor.has_image():
-                print("⚠️ 画像が読み込まれていません")
+                warning_print("画像が読み込まれていません")
                 return
             
-            print("🔄 全プラグイン処理開始...")
+            debug_print("全プラグイン処理開始...")
             
             # 元画像から開始
             adjusted_image = self.image_editor.get_original_image()
             if not adjusted_image:
-                print("❌ 元画像が取得できません")
+                error_print("元画像が取得できません")
                 return
-            print(f"📸 元画像サイズ: {adjusted_image.size}")
+            debug_print(f"元画像サイズ: {adjusted_image.size}")
             
             # 有効な全プラグインで順次処理
             enabled_plugins = self.plugin_manager.get_enabled_plugins()
-            print(f"🔌 有効プラグイン数: {len(enabled_plugins)}")
+            debug_print(f"有効プラグイン数: {len(enabled_plugins)}")
             
             for i, plugin in enumerate(enabled_plugins, 1):
                 plugin_params = plugin.get_parameters()
-                print(f"🎛️ プラグイン{i}: {plugin.get_display_name()}")
-                print(f"   パラメータ: {plugin_params}")
+                debug_print(f"🎛️ プラグイン{i}: {plugin.get_display_name()}")
+                debug_print(f"   パラメータ: {plugin_params}")
                 
                 # パラメータに変更があるかチェック
                 has_changes = any(
@@ -246,20 +386,89 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 
                 if has_changes:
                     adjusted_image = plugin.process_image(adjusted_image)
-                    print(f"   ✅ 処理適用: {plugin.get_display_name()}")
+                    debug_print(f"   ✅ 処理適用: {plugin.get_display_name()}")
                 else:
-                    print(f"   ⏭️ スキップ: {plugin.get_display_name()} (変更なし)")
+                    debug_print(f"   ⏭️ スキップ: {plugin.get_display_name()} (変更なし)")
             
             # 処理済み画像を表示
             self.image_editor.update_current_image(adjusted_image)
             
-            print("✅ 全プラグイン処理完了")
+            debug_print("✅ 全プラグイン処理完了")
             
         except Exception as e:
-            print(f"❌ プラグイン処理エラー: {e}")
+            error_print(f"プラグイン処理エラー: {e}")
             import traceback
             traceback.print_exc()
             MessageDialog.show_error(self, "エラー", f"画像処理エラー: {e}")
+    
+    def undo_special_filter(self, filter_type: str):
+        """特殊フィルターのundo処理"""
+        try:
+            debug_print(f"🔄 特殊フィルター取消: {filter_type}")
+            
+            # フィルタープラグインのバックアップから復元
+            filter_plugin = self.plugin_manager.get_plugin("filter_processing")
+            if filter_plugin and hasattr(filter_plugin, 'special_filter_backup') and filter_plugin.special_filter_backup:
+                # バックアップから復元
+                self.image_editor.update_current_image(filter_plugin.special_filter_backup)
+                filter_plugin.special_filter_backup = None  # バックアップをクリア
+                self.image_editor.status_label.configure(text=f"🔄 {filter_type}フィルターを取り消しました")
+                debug_print(f"✅ 特殊フィルター取消完了: {filter_type}")
+            else:
+                # バックアップがない場合は全体を再処理
+                debug_print("⚠️ バックアップがないため全体を再処理")
+                self.apply_all_adjustments()
+                self.image_editor.status_label.configure(text="🔄 フィルターを取り消しました（全体再処理）")
+                
+        except Exception as e:
+            error_print(f"特殊フィルター取消エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"フィルター取消エラー: {e}")
+    
+    def undo_morphology_operation(self):
+        """モルフォロジー演算のundo処理"""
+        try:
+            debug_print("🔄 モルフォロジー演算取消")
+            
+            # フィルタープラグインのバックアップから復元
+            filter_plugin = self.plugin_manager.get_plugin("filter_processing")
+            if filter_plugin and hasattr(filter_plugin, 'morphology_backup') and filter_plugin.morphology_backup:
+                # バックアップから復元
+                self.image_editor.update_current_image(filter_plugin.morphology_backup)
+                filter_plugin.morphology_backup = None  # バックアップをクリア
+                self.image_editor.status_label.configure(text="🔄 モルフォロジー演算を取り消しました")
+                debug_print("✅ モルフォロジー演算取消完了")
+            else:
+                # バックアップがない場合は全体を再処理
+                debug_print("⚠️ バックアップがないため全体を再処理")
+                self.apply_all_adjustments()
+                self.image_editor.status_label.configure(text="🔄 モルフォロジー演算を取り消しました（全体再処理）")
+                
+        except Exception as e:
+            debug_print(f"❌ モルフォロジー演算取消エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"モルフォロジー演算取消エラー: {e}")
+    
+    def undo_contour_detection(self):
+        """輪郭検出のundo処理"""
+        try:
+            debug_print("🔄 輪郭検出取消")
+            
+            # フィルタープラグインのバックアップから復元
+            filter_plugin = self.plugin_manager.get_plugin("filter_processing")
+            if filter_plugin and hasattr(filter_plugin, 'contour_backup') and filter_plugin.contour_backup:
+                # バックアップから復元
+                self.image_editor.update_current_image(filter_plugin.contour_backup)
+                filter_plugin.contour_backup = None  # バックアップをクリア
+                self.image_editor.status_label.configure(text="🔄 輪郭検出を取り消しました")
+                debug_print("✅ 輪郭検出取消完了")
+            else:
+                # バックアップがない場合は全体を再処理
+                debug_print("⚠️ バックアップがないため全体を再処理")
+                self.apply_all_adjustments()
+                self.image_editor.status_label.configure(text="🔄 輪郭検出を取り消しました（全体再処理）")
+                
+        except Exception as e:
+            debug_print(f"❌ 輪郭検出取消エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"輪郭検出取消エラー: {e}")
     
     def apply_histogram_equalization(self):
         """ヒストグラム均等化を適用"""
@@ -274,7 +483,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             self.image_editor.status_label.configure(text="📊 ヒストグラム均等化を適用しました")
                 
         except Exception as e:
-            print(f"❌ ヒストグラム均等化エラー: {e}")
+            debug_print(f"❌ ヒストグラム均等化エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"ヒストグラム均等化エラー: {e}")
     
     def apply_special_filter(self, filter_type: str):
@@ -287,16 +496,19 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             # フィルタープラグインを取得
             filter_plugin = self.plugin_manager.get_plugin("filter_processing")
             if filter_plugin:
+                # 処理前の画像をバックアップ
+                filter_plugin.special_filter_backup = current_image.copy()
+                
                 # 基底クラスのapply_special_filterメソッドを使用
                 filtered_image = filter_plugin.apply_special_filter(current_image, filter_type)
                 self.image_editor.update_current_image(filtered_image)
                 self.image_editor.status_label.configure(text=f"✨ {filter_type}フィルターを適用しました")
-                print(f"✅ 特殊フィルター適用完了: {filter_type}")
+                debug_print(f"✅ 特殊フィルター適用完了: {filter_type}")
             else:
-                print("❌ フィルタープラグインが見つかりません")
+                debug_print("❌ フィルタープラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ 特殊フィルターエラー: {e}")
+            debug_print(f"❌ 特殊フィルターエラー: {e}")
             MessageDialog.show_error(self, "エラー", f"フィルター処理エラー: {e}")
             import traceback
             traceback.print_exc()
@@ -321,7 +533,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 濃度調整プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ 2値化エラー: {e}")
+            debug_print(f"❌ 2値化エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"2値化エラー: {e}")
     
     def apply_morphology_operation(self, operation: str):
@@ -335,6 +547,9 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             # フィルター処理プラグインからモルフォロジー演算を実行
             filter_plugin = self.plugin_manager.get_plugin('filter_processing')
             if filter_plugin and hasattr(filter_plugin, 'apply_morphology_operation'):
+                # 処理前の画像をバックアップ
+                filter_plugin.morphology_backup = current_image.copy()
+                
                 apply_method = getattr(filter_plugin, 'apply_morphology_operation')
                 processed_image = apply_method(current_image, operation)
                 self.image_editor.update_current_image(processed_image)
@@ -344,7 +559,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ フィルター処理プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ モルフォロジー演算エラー: {e}")
+            debug_print(f"❌ モルフォロジー演算エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"モルフォロジー演算エラー: {e}")
     
     def apply_contour_detection(self):
@@ -358,6 +573,9 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             # フィルター処理プラグインから輪郭検出を実行
             filter_plugin = self.plugin_manager.get_plugin('filter_processing')
             if filter_plugin and hasattr(filter_plugin, 'apply_contour_detection'):
+                # 処理前の画像をバックアップ
+                filter_plugin.contour_backup = current_image.copy()
+                
                 apply_method = getattr(filter_plugin, 'apply_contour_detection')
                 processed_image = apply_method(current_image)
                 self.image_editor.update_current_image(processed_image)
@@ -367,7 +585,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ フィルター処理プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ 輪郭検出エラー: {e}")
+            debug_print(f"❌ 輪郭検出エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"輪郭検出エラー: {e}")
     
     def show_histogram_analysis(self):
@@ -378,13 +596,57 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 簡易ヒストグラム解析を実行（詳細な解析は今後実装）
-            self.image_editor.status_label.configure(text="📊 ヒストグラム解析機能（実装予定）")
-            print("📊 ヒストグラム解析機能が実行されました（実装予定）")
+            # バックアップを保存
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin:
+                analysis_plugin.histogram_backup = current_image.copy()
+            
+            # OpenCVでヒストグラム計算（matplotlibなしで基本統計を表示）
+            cv_image = cv2.cvtColor(np.array(current_image), cv2.COLOR_RGB2BGR)
+            gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            
+            # 基本統計情報を計算
+            mean_val = np.mean(gray_image)
+            std_val = np.std(gray_image)
+            min_val = np.min(gray_image)
+            max_val = np.max(gray_image)
+            
+            # ヒストグラム計算（binの数を256に設定）
+            hist = cv2.calcHist([gray_image], [0], None, [256], [0, 256])
+            
+            # 最頻値（ピーク）を計算
+            peak_idx = np.argmax(hist)
+            peak_value = hist[peak_idx][0]
+            
+            # 結果を画像に描画
+            result_image = cv_image.copy()
+            
+            # 統計情報をテキストで表示
+            stats_text = [
+                f"Mean: {mean_val:.1f}",
+                f"Std: {std_val:.1f}",
+                f"Range: {min_val}-{max_val}",
+                f"Peak: {peak_idx} ({peak_value:.0f})"
+            ]
+            
+            # テキストを画像に描画
+            y_offset = 30
+            for i, text in enumerate(stats_text):
+                cv2.putText(result_image, text, (10, y_offset + i * 25), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+            
+            # PIL形式に戻して表示
+            result_rgb = cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB)
+            final_image = Image.fromarray(result_rgb)
+            
+            self.image_editor.update_current_image(final_image)
+            self.image_editor.display_image(final_image)
+            self.image_editor.status_label.configure(text="📊 ヒストグラム解析を表示しました")
+            debug_print(f"📊 ヒストグラム解析完了: 平均={mean_val:.1f}, 標準偏差={std_val:.1f}")
                 
         except Exception as e:
-            print(f"❌ ヒストグラム解析エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"ヒストグラム解析エラー: {e}")
+            debug_print(f"❌ ヒストグラム解析エラー: {e}")
+            self.image_editor.status_label.configure(text="❌ ヒストグラム解析でエラーが発生しました")
     
     def apply_feature_detection(self, feature_type: str):
         """特徴点検出を適用"""
@@ -394,8 +656,12 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 画像解析プラグインから特徴点検出を実行
+            # バックアップを保存
             analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin:
+                analysis_plugin.features_backup = current_image.copy()
+            
+            # 画像解析プラグインから特徴点検出を実行
             if analysis_plugin and hasattr(analysis_plugin, 'apply_feature_detection'):
                 apply_method = getattr(analysis_plugin, 'apply_feature_detection')
                 processed_image = apply_method(current_image, feature_type)
@@ -406,8 +672,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ 特徴点検出エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"特徴点検出エラー: {e}")
+            debug_print(f"❌ 特徴点検出エラー: {e}")
     
     def apply_frequency_analysis(self, analysis_type: str):
         """周波数解析を適用"""
@@ -417,8 +682,12 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 画像解析プラグインから周波数解析を実行
+            # バックアップを保存
             analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin:
+                analysis_plugin.frequency_backup = current_image.copy()
+            
+            # 画像解析プラグインから周波数解析を実行
             if analysis_plugin and hasattr(analysis_plugin, 'apply_frequency_analysis'):
                 apply_method = getattr(analysis_plugin, 'apply_frequency_analysis')
                 processed_image = apply_method(current_image, analysis_type)
@@ -429,8 +698,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ 周波数解析エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"周波数解析エラー: {e}")
+            debug_print(f"❌ 周波数解析エラー: {e}")
     
     def detect_blur(self):
         """ブラー検出を実行"""
@@ -440,8 +708,12 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 画像解析プラグインからブラー検出を実行
+            # バックアップを保存
             analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin:
+                analysis_plugin.blur_backup = current_image.copy()
+            
+            # 画像解析プラグインからブラー検出を実行
             if analysis_plugin and hasattr(analysis_plugin, 'detect_blur'):
                 apply_method = getattr(analysis_plugin, 'detect_blur')
                 processed_image = apply_method(current_image)
@@ -452,8 +724,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ ブラー検出エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"ブラー検出エラー: {e}")
+            debug_print(f"❌ ブラー検出エラー: {e}")
     
     def analyze_noise(self):
         """ノイズ解析を実行"""
@@ -463,8 +734,12 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 画像解析プラグインからノイズ解析を実行
+            # バックアップを保存
             analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin:
+                analysis_plugin.noise_backup = current_image.copy()
+            
+            # 画像解析プラグインからノイズ解析を実行
             if analysis_plugin and hasattr(analysis_plugin, 'analyze_noise'):
                 apply_method = getattr(analysis_plugin, 'analyze_noise')
                 processed_image = apply_method(current_image)
@@ -475,8 +750,78 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
                 
         except Exception as e:
-            print(f"❌ ノイズ解析エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"ノイズ解析エラー: {e}")
+            debug_print(f"❌ ノイズ解析エラー: {e}")
+    
+    # 画像解析Undo機能
+    def undo_feature_detection(self, feature_type: str):
+        """特徴点検出のundo"""
+        try:
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'features_backup') and analysis_plugin.features_backup:
+                self.image_editor.update_current_image(analysis_plugin.features_backup)
+                self.image_editor.display_image(analysis_plugin.features_backup)
+                analysis_plugin.features_backup = None
+                self.image_editor.status_label.configure(text=f"🔄 {feature_type}特徴点検出を取り消しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 取り消し可能な特徴点検出がありません")
+        except Exception as e:
+            debug_print(f"❌ 特徴点検出undo エラー: {e}")
+    
+    def undo_frequency_analysis(self, analysis_type: str):
+        """周波数解析のundo"""
+        try:
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'frequency_backup') and analysis_plugin.frequency_backup:
+                self.image_editor.update_current_image(analysis_plugin.frequency_backup)
+                self.image_editor.display_image(analysis_plugin.frequency_backup)
+                analysis_plugin.frequency_backup = None
+                self.image_editor.status_label.configure(text=f"🔄 {analysis_type}解析を取り消しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 取り消し可能な周波数解析がありません")
+        except Exception as e:
+            debug_print(f"❌ 周波数解析undo エラー: {e}")
+    
+    def undo_blur_detection(self):
+        """ブラー検出のundo"""
+        try:
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'blur_backup') and analysis_plugin.blur_backup:
+                self.image_editor.update_current_image(analysis_plugin.blur_backup)
+                self.image_editor.display_image(analysis_plugin.blur_backup)
+                analysis_plugin.blur_backup = None
+                self.image_editor.status_label.configure(text="🔄 ブラー検出を取り消しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 取り消し可能なブラー検出がありません")
+        except Exception as e:
+            debug_print(f"❌ ブラー検出undo エラー: {e}")
+    
+    def undo_noise_analysis(self):
+        """ノイズ解析のundo"""
+        try:
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'noise_backup') and analysis_plugin.noise_backup:
+                self.image_editor.update_current_image(analysis_plugin.noise_backup)
+                self.image_editor.display_image(analysis_plugin.noise_backup)
+                analysis_plugin.noise_backup = None
+                self.image_editor.status_label.configure(text="🔄 ノイズ解析を取り消しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 取り消し可能なノイズ解析がありません")
+        except Exception as e:
+            debug_print(f"❌ ノイズ解析undo エラー: {e}")
+    
+    def undo_histogram_analysis(self):
+        """ヒストグラム解析のundo"""
+        try:
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'histogram_backup') and analysis_plugin.histogram_backup:
+                self.image_editor.update_current_image(analysis_plugin.histogram_backup)
+                self.image_editor.display_image(analysis_plugin.histogram_backup)
+                analysis_plugin.histogram_backup = None
+                self.image_editor.status_label.configure(text="🔄 ヒストグラム解析を取り消しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 取り消し可能なヒストグラム解析がありません")
+        except Exception as e:
+            debug_print(f"❌ ヒストグラム解析undo エラー: {e}")
     
     # 画像操作メソッド（ImageEditorクラスに委譲）
     def load_image(self):
@@ -496,33 +841,67 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
     def reset_all_plugins(self):
         """全プラグインをリセット"""
         try:
-            print("🔧 全プラグインリセット開始...")
+            debug_print("🔧 全プラグインリセット開始...")
             
             # 全プラグインのパラメータをリセット
             for plugin in self.plugin_manager.get_all_plugins():
                 if hasattr(plugin, 'reset_parameters'):
                     plugin.reset_parameters()
-                    print(f"   🔄 {plugin.get_display_name()}: パラメータリセット完了")
+                    debug_print(f"   🔄 {plugin.get_display_name()}: パラメータリセット完了")
             
             # 元画像を表示（プラグイン処理を適用しない状態）
             if self.image_editor.has_image():
                 self.image_editor.reset_to_original()
-                print("   📸 元画像を表示")
+                debug_print("   📸 元画像を表示")
             
             self.image_editor.status_label.configure(text="🔧 全プラグインをリセットしました")
-            print("✅ 全プラグインリセット完了")
+            debug_print("✅ 全プラグインリセット完了")
             
         except Exception as e:
-            print(f"❌ プラグインリセットエラー: {e}")
+            debug_print(f"❌ プラグインリセットエラー: {e}")
             MessageDialog.show_error(self, "エラー", f"リセットエラー: {e}")
             import traceback
             traceback.print_exc()
 
 
+def parse_arguments():
+    """コマンドライン引数を解析"""
+    parser = argparse.ArgumentParser(description='Advanced Image Editor - Plugin System Version')
+    
+    # ログレベル指定オプション
+    parser.add_argument('--log-level', choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                       default='INFO', help='ログレベルを指定 (デフォルト: INFO)')
+    
+    # 下位互換性のため--debugオプションも残す
+    parser.add_argument('--debug', action='store_true', 
+                       help='デバッグモードで起動（--log-level DEBUGと同等）')
+    
+    return parser.parse_args()
+
+
 def main():
     """メイン関数"""
     try:
-        print("🎨 Advanced Image Editor (Plugin Version) を起動中...")
+        # コマンドライン引数解析
+        args = parse_arguments()
+        
+        # ログレベル設定
+        if args.debug:
+            # --debugオプションが指定された場合はDEBUGレベルに設定
+            set_log_level(LogLevel.DEBUG)
+        else:
+            # --log-levelオプションの値を使用
+            level_mapping = {
+                'DEBUG': LogLevel.DEBUG,
+                'INFO': LogLevel.INFO,
+                'WARNING': LogLevel.WARNING,
+                'ERROR': LogLevel.ERROR,
+                'CRITICAL': LogLevel.CRITICAL
+            }
+            set_log_level(level_mapping[args.log_level])
+        
+        info_print("🎨 Advanced Image Editor (Plugin Version) を起動中...")
+        debug_print(f"ログレベル設定: {get_log_level().name}")
         
         # CustomTkinterの外観設定
         ctk.set_appearance_mode("dark")
@@ -533,7 +912,7 @@ def main():
         app.mainloop()
         
     except Exception as e:
-        print(f"❌ アプリケーションの起動に失敗しました: {e}")
+        critical_print(f"アプリケーションの起動に失敗しました: {e}")
         import traceback
         traceback.print_exc()
 

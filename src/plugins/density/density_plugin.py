@@ -42,6 +42,10 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         self.use_curve_gamma = False  # カーブベースガンマ補正を使用するかどうか
         self.gamma_lut = None  # ガンマ補正用LUT
         
+        # 個別機能の状態追跡
+        self.applied_binary = False
+        self.applied_histogram = False
+        
     def get_display_name(self) -> str:
         return "濃度調整"
     
@@ -246,12 +250,14 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
     
     def _apply_binary_threshold(self) -> None:
         """2値化実行"""
+        self.applied_binary = True
         print(f"📐 2値化実行: 閾値={self.threshold_value}")
         if hasattr(self, 'threshold_callback'):
             self.threshold_callback()
     
     def _on_histogram_equalization(self) -> None:
         """ヒストグラム均等化実行"""
+        self.applied_histogram = True
         print(f"📊 ヒストグラム均等化実行")
         # このボタンは特別な処理として扱い、パラメータ変更コールバックを呼び出す
         if hasattr(self, 'histogram_callback'):
@@ -409,6 +415,10 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         # カーブエディタ関連のリセット
         self.use_curve_gamma = False
         self.gamma_lut = None
+        
+        # 個別機能の状態もリセット
+        self.applied_binary = False
+        self.applied_histogram = False
         
         # ガンマ補正方式をスライダーに戻す
         if hasattr(self, 'gamma_mode_var'):

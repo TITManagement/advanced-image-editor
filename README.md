@@ -101,30 +101,32 @@ python -m venv .venv
 
 ## 実行方法
 
-### macOS / Linux (Ubuntu等)
+### 基本実行
 
-#### 推奨実行方法
+#### macOS / Linux (Ubuntu等)
+
+**推奨実行方法**
 ```bash
 cd <本リポジトリのクローン先ディレクトリ>
 .venv/bin/python src/main_plugin.py
 ```
 
-#### 仮想環境アクティベート後
+**仮想環境アクティベート後**
 ```bash
 cd <本リポジトリのクローン先ディレクトリ>
 source .venv/bin/activate
 python src/main_plugin.py
 ```
 
-### Windows
+#### Windows
 
-#### 推奨実行方法（PowerShell/コマンドプロンプト）
+**推奨実行方法（PowerShell/コマンドプロンプト）**
 ```powershell
 cd <本リポジトリのクローン先ディレクトリ>
 .venv\Scripts\python.exe src\main_plugin.py
 ```
 
-#### 仮想環境アクティベート後
+**仮想環境アクティベート後**
 ```powershell
 # PowerShell
 cd <本リポジトリのクローン先ディレクトリ>
@@ -135,6 +137,51 @@ python src\main_plugin.py
 cd <本リポジトリのクローン先ディレクトリ>
 .venv\Scripts\activate.bat
 python src\main_plugin.py
+```
+
+### 起動オプション
+
+アプリケーションは以下のコマンドライン引数をサポートしています：
+
+#### ログレベル指定
+
+**--log-level オプション**
+```bash
+# 各ログレベルでの起動
+.venv/bin/python src/main_plugin.py --log-level DEBUG     # 全メッセージ表示（開発用）
+.venv/bin/python src/main_plugin.py --log-level INFO      # 一般情報以上を表示（デフォルト）
+.venv/bin/python src/main_plugin.py --log-level WARNING   # 警告以上のみ表示
+.venv/bin/python src/main_plugin.py --log-level ERROR     # エラー以上のみ表示
+.venv/bin/python src/main_plugin.py --log-level CRITICAL  # 致命的エラーのみ表示
+```
+
+**--debug オプション（下位互換性）**
+```bash
+# デバッグモードで起動（--log-level DEBUGと同等）
+.venv/bin/python src/main_plugin.py --debug
+```
+
+#### ログレベルの説明
+
+| レベル | 説明 | 表示される内容 |
+|--------|------|-------------|
+| **DEBUG** | 🔍 開発・デバッグ用 | 詳細な動作情報、プラグイン初期化過程、パラメータ変更履歴 |
+| **INFO** | ℹ️ 一般情報（デフォルト） | アプリケーション起動、プラグイン登録、画像読み込み状況 |
+| **WARNING** | ⚠️ 警告 | 設定ファイル不足、オプション機能無効化の通知 |
+| **ERROR** | ❌ エラー | 機能の一部失敗、画像処理エラー、プラグイン読み込み失敗 |
+| **CRITICAL** | 🚨 致命的エラー | アプリケーション継続困難な重大エラー |
+
+#### 使用例
+
+```bash
+# 開発時：詳細なデバッグ情報を表示
+.venv/bin/python src/main_plugin.py --debug
+
+# 通常使用：重要な情報のみ表示
+.venv/bin/python src/main_plugin.py --log-level INFO
+
+# 静寂モード：警告・エラーのみ表示
+.venv/bin/python src/main_plugin.py --log-level WARNING
 ```
 
 ## 利用可能なプラグイン
