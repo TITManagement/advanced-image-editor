@@ -9,7 +9,7 @@ import numpy as np
 import cv2
 from PIL import Image
 import customtkinter as ctk
-from typing import Dict, Any
+from typing import Dict, Any, Union
 
 # 相対インポートでcore moduleを使用
 import sys
@@ -17,6 +17,14 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
+
+# カーブエディタのインポート
+try:
+    from ui.curve_editor import CurveEditor
+    CURVE_EDITOR_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ カーブエディタインポート警告: {e}")
+    CURVE_EDITOR_AVAILABLE = False
 
 
 class DensityAdjustmentPlugin(ImageProcessorPlugin):
@@ -29,6 +37,10 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         self.highlight_value = 0
         self.temperature_value = 0
         
+        # カーブエディタ用の変数
+        self.use_curve_gamma = False  # カーブベースガンマ補正を使用するかどうか
+        self.gamma_lut = None  # ガンマ補正用LUT
+        
     def get_display_name(self) -> str:
         return "濃度調整"
     
@@ -38,9 +50,42 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
     def create_ui(self, parent: ctk.CTkFrame) -> None:
         """濃度調整UIを作成"""
         
-        # ガンマ補正
+        # ガンマ補正方式選択
+        self.gamma_mode_frame = ctk.CTkFrame(parent)
+        self.gamma_mode_frame.pack(fill="x", padx=5, pady=5)
+        
+        ctk.CTkLabel(self.gamma_mode_frame, text="ガンマ補正方式").pack(pady=(5, 0))
+        
+        self.gamma_mode_var = ctk.StringVar(value="slider")
+        self.gamma_mode_radio1 = ctk.CTkRadioButton(
+            self.gamma_mode_frame, 
+            text="スライダー", 
+            variable=self.gamma_mode_var, 
+            value="slider",
+            command=self._on_gamma_mode_change
+        )
+        self.gamma_mode_radio1.pack(side="left", padx=10, pady=5)
+        
+        if CURVE_EDITOR_AVAILABLE:
+            self.gamma_mode_radio2 = ctk.CTkRadioButton(
+                self.gamma_mode_frame, 
+                text="カーブ", 
+                variable=self.gamma_mode_var, 
+                value="curve",
+                command=self._on_gamma_mode_change
+            )
+            self.gamma_mode_radio2.pack(side="left", padx=10, pady=5)
+        
+        # ガンマ補正コントロール用フレーム
+        self.gamma_control_frame = ctk.CTkFrame(parent)
+        self.gamma_control_frame.pack(fill="x", padx=5, pady=5)
+        
+        # ガンマ補正スライダー（デフォルト）
+        self.gamma_slider_frame = ctk.CTkFrame(self.gamma_control_frame)
+        self.gamma_slider_frame.pack(fill="x", padx=5, pady=5)
+        
         self._sliders['gamma'], self._labels['gamma'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
+            parent=self.gamma_slider_frame,
             text="ガンマ補正",
             from_=0.1,
             to=3.0,
@@ -48,6 +93,17 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             command=self._on_gamma_change,
             value_format="{:.2f}"
         )
+        
+        # カーブエディタフレーム（初期は非表示）
+        if CURVE_EDITOR_AVAILABLE:
+            self.gamma_curve_frame = ctk.CTkFrame(self.gamma_control_frame)
+            self.curve_editor = CurveEditor(
+                self.gamma_curve_frame, 
+                width=250, 
+                height=250,
+                on_curve_change=self._on_curve_change
+            )
+            self.curve_editor.pack(padx=5, pady=5)
         
         # シャドウ調整
         self._sliders['shadow'], self._labels['shadow'] = PluginUIHelper.create_slider_with_label(
@@ -104,6 +160,34 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         print(f"🔍 ガンマ値更新: {self.gamma_value:.2f}")
         self._on_parameter_change()
     
+    def _on_gamma_mode_change(self) -> None:
+        """ガンマ補正方式変更時の処理"""
+        mode = self.gamma_mode_var.get()
+        print(f"🔄 ガンマ補正方式変更: {mode}")
+        
+        if mode == "slider":
+            # スライダーモードに切り替え
+            self.use_curve_gamma = False
+            self.gamma_lut = None
+            self.gamma_slider_frame.pack(fill="x", padx=5, pady=5)
+            if CURVE_EDITOR_AVAILABLE and hasattr(self, 'gamma_curve_frame'):
+                self.gamma_curve_frame.pack_forget()
+        elif mode == "curve" and CURVE_EDITOR_AVAILABLE:
+            # カーブモードに切り替え
+            self.use_curve_gamma = True
+            self.gamma_slider_frame.pack_forget()
+            if hasattr(self, 'gamma_curve_frame'):
+                self.gamma_curve_frame.pack(fill="x", padx=5, pady=5)
+        
+        self._on_parameter_change()
+    
+    def _on_curve_change(self, lut: np.ndarray) -> None:
+        """カーブ変更時の処理"""
+        if self.use_curve_gamma:
+            self.gamma_lut = lut.copy()
+            print(f"📊 ガンマカーブ更新: LUT[0]={lut[0]}, LUT[128]={lut[128]}, LUT[255]={lut[255]}")
+            self._on_parameter_change()
+    
     def _on_shadow_change(self, value: float) -> None:
         """シャドウ値変更時の処理"""
         self.shadow_value = int(value)
@@ -152,8 +236,14 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             img_array = np.array(result_image, dtype=np.float32)
             
             # ガンマ補正
-            if self.gamma_value != 1.0:
-                print(f"🎯 ガンマ補正適用: {self.gamma_value}")
+            if self.use_curve_gamma and self.gamma_lut is not None:
+                print(f"🎯 カーブベースガンマ補正適用")
+                # カーブベースのガンマ補正
+                img_array_int = img_array.astype(np.uint8)
+                img_array = self.gamma_lut[img_array_int].astype(np.float32)
+            elif self.gamma_value != 1.0:
+                print(f"🎯 スライダーベースガンマ補正適用: {self.gamma_value}")
+                # 従来のスライダーベースガンマ補正
                 img_array = img_array / 255.0
                 img_array = np.power(img_array, 1.0 / self.gamma_value)
                 img_array = img_array * 255.0
@@ -250,6 +340,19 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         self.highlight_value = 0
         self.temperature_value = 0
         
+        # カーブエディタ関連のリセット
+        self.use_curve_gamma = False
+        self.gamma_lut = None
+        
+        # ガンマ補正方式をスライダーに戻す
+        if hasattr(self, 'gamma_mode_var'):
+            self.gamma_mode_var.set("slider")
+            self._on_gamma_mode_change()
+        
+        # カーブエディタをリセット
+        if CURVE_EDITOR_AVAILABLE and hasattr(self, 'curve_editor'):
+            self.curve_editor._reset_curve()
+        
         # スライダーの値を明示的に設定してコールバックを強制実行
         if 'gamma' in self._sliders:
             self._sliders['gamma'].set(1.0)
@@ -266,9 +369,18 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
     def get_parameters(self) -> Dict[str, Any]:
         """現在のパラメータを取得"""
         # 実際の変数値を返す（スライダーの値ではなく）
-        return {
-            'gamma': self.gamma_value,
+        params: Dict[str, Any] = {
             'shadow': self.shadow_value,
             'highlight': self.highlight_value,
             'temperature': self.temperature_value
         }
+        
+        # ガンマ補正のパラメータは使用モードに応じて変更
+        if self.use_curve_gamma and self.gamma_lut is not None:
+            params['gamma_mode'] = 'curve'
+            params['gamma_curve'] = 'custom'  # カーブが設定されていることを示す
+        else:
+            params['gamma_mode'] = 'slider'
+            params['gamma'] = self.gamma_value
+        
+        return params

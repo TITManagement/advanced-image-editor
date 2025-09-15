@@ -1,44 +1,93 @@
 [project]
 name = "advanced-image-editor"
 version = "1.0.0"
-description = "Advanced Image Editor with Plugin System - Cross-Platform Compatible"
+description = "Advanced Image Editor with Plugin System - プラグインシステム対応の高度な画像編集アプリケーション"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
     {name = "TITManagement", email = "contact@titmanagement.com"}
 ]
-keywords = ["image-editor", "plugins", "opencv", "customtkinter", "cross-platform"]
+keywords = [
+    "image-processing", "gui", "plugins", "opencv", "customtkinter",
+    "photo-editor", "filters", "image-enhancement", "python"
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Graphics :: Editors",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Operating System :: OS Independent",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
+
 dependencies = [
+    # GUI Framework
     "customtkinter>=5.2.0",
     "darkdetect>=0.8.0",
+    
+    # Image Processing - クロスプラットフォーム対応
     "opencv-python>=4.8.0",
     "pillow>=10.0.0",
     "numpy>=1.24.0",
+    
+    # Scientific Computing
+    "scipy>=1.10.0",
+    
+    # Utilities
     "packaging>=23.0",
+    
+    # プラットフォーム固有の依存関係
+    "platformdirs>=3.0.0",  # OS固有のディレクトリ管理
+    "psutil>=5.9.0",        # システム情報取得（メモリ・CPU監視）
+]
+
+# Development dependencies for gui_framework
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+]
+
+performance = [
+    "numba>=0.57.0",
+    "opencv-contrib-python>=4.8.0",
+]
+
+# Windows固有の依存関係
+windows = [
+    "pywin32>=306; sys_platform=='win32'",
+    "winsound; sys_platform=='win32'",
+]
+
+# macOS固有の依存関係  
+macos = [
+    "pyobjc-framework-Cocoa>=9.0; sys_platform=='darwin'",
+]
+
+# Linux固有の依存関係
+linux = [
+    "python-xlib>=0.33; sys_platform=='linux'",
 ]
 
 [project.urls]
 Homepage = "https://github.com/TITManagement/advanced-image-editor"
 Repository = "https://github.com/TITManagement/advanced-image-editor"
-Issues = "https://github.com/TITManagement/advanced-image-editor/issues"
+Documentation = "https://github.com/TITManagement/advanced-image-editor#readme"
+"Bug Reports" = "https://github.com/TITManagement/advanced-image-editor/issues"
 
 [project.scripts]
 advanced-image-editor = "src.main_plugin:main"
+aie = "src.main_plugin:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
@@ -49,15 +98,32 @@ where = ["."]
 include = ["src*"]
 
 [tool.setuptools.package-data]
-"*" = ["*.jpeg", "*.jpg", "*.png"]
+"*" = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.json", "*.txt"]
+
+[tool.black]
+line-length = 100
+target-version = ["py39", "py310", "py311", "py312", "py313"]
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_functions = ["test_*"]
+addopts = "-v --cov=src --cov-report=html --cov-report=term"
 
 # Cross-platform compatibility settings
 [tool.setuptools]
 platforms = ["any"]
-
-# Development dependencies for gui_framework
-[project.optional-dependencies]
-dev = [
-    # gui_frameworkライブラリの開発依存関係
-    # ローカルライブラリは相対パスで自動検出
-]
