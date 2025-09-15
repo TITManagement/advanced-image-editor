@@ -63,8 +63,10 @@ git clone https://github.com/TITManagement/advanced-image-editor.git
 cd advanced-image-editor
 
 # 自動セットアップスクリプトを実行（gui_frameworkパスも自動検出）
-python setup.py
+python scripts/setup_dev_environment.py
 ```
+
+> 💡 **新規環境構築の詳細ガイド**: 各スクリプトの詳細な使用方法、トラブルシューティング、シナリオ別の実行手順については [📁 scripts/README.md](./scripts/README.md) をご覧ください。
 
 ### 手動セットアップ
 

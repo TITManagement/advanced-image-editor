@@ -36,6 +36,7 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         self.shadow_value = 0
         self.highlight_value = 0
         self.temperature_value = 0
+        self.threshold_value = 127
         
         # カーブエディタ用の変数
         self.use_curve_gamma = False  # カーブベースガンマ補正を使用するかどうか
@@ -138,6 +139,30 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             value_format="{:.0f}"
         )
         
+        # 2値化セクション
+        threshold_frame = ctk.CTkFrame(parent)
+        threshold_frame.pack(fill="x", padx=5, pady=5)
+        
+        ctk.CTkLabel(threshold_frame, text="2値化", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        
+        # 閾値スライダー
+        self._sliders['threshold'], self._labels['threshold'] = PluginUIHelper.create_slider_with_label(
+            parent=threshold_frame,
+            text="閾値",
+            from_=0,
+            to=255,
+            default_value=127,
+            command=self._on_threshold_change,
+            value_format="{:.0f}"
+        )
+        
+        # 2値化実行ボタン
+        self._buttons['binary'] = PluginUIHelper.create_button(
+            threshold_frame,
+            text="2値化実行",
+            command=self._apply_binary_threshold
+        )
+        
         # ヒストグラム均等化ボタン
         self._buttons['histogram'] = PluginUIHelper.create_button(
             parent=parent,
@@ -212,6 +237,19 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         print(f"🌡️ 色温度値更新: {self.temperature_value}")
         self._on_parameter_change()
     
+    def _on_threshold_change(self, value: float) -> None:
+        """閾値変更時の処理"""
+        self.threshold_value = int(value)
+        if hasattr(self, '_labels') and 'threshold' in self._labels:
+            self._labels['threshold'].configure(text=f"{self.threshold_value}")
+        print(f"📐 閾値更新: {self.threshold_value}")
+    
+    def _apply_binary_threshold(self) -> None:
+        """2値化実行"""
+        print(f"📐 2値化実行: 閾値={self.threshold_value}")
+        if hasattr(self, 'threshold_callback'):
+            self.threshold_callback()
+    
     def _on_histogram_equalization(self) -> None:
         """ヒストグラム均等化実行"""
         print(f"📊 ヒストグラム均等化実行")
@@ -222,6 +260,10 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
     def set_histogram_callback(self, callback):
         """ヒストグラム均等化用の特別なコールバックを設定"""
         self.histogram_callback = callback
+    
+    def set_threshold_callback(self, callback):
+        """2値化用のコールバックを設定"""
+        self.threshold_callback = callback
     
     def process_image(self, image: Image.Image, **params) -> Image.Image:
         """濃度調整を適用"""
@@ -327,6 +369,29 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             print(f"❌ ヒストグラム均等化エラー: {e}")
             return image
     
+    def apply_binary_threshold(self, image: Image.Image) -> Image.Image:
+        """2値化を適用"""
+        try:
+            print(f"📐 2値化開始: 閾値={self.threshold_value}")
+            
+            # OpenCVフォーマットに変換
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            
+            # 2値化実行
+            _, binary_image = cv2.threshold(gray_image, self.threshold_value, 255, cv2.THRESH_BINARY)
+            
+            # グレースケールをRGBに変換してPIL形式に戻す
+            binary_rgb = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2RGB)
+            result_image = Image.fromarray(binary_rgb)
+            
+            print(f"✅ 2値化完了")
+            return result_image
+            
+        except Exception as e:
+            print(f"❌ 2値化エラー: {e}")
+            return image
+    
     def reset_parameters(self) -> None:
         """パラメータをリセット"""
         print(f"🔄 濃度調整パラメータリセット")
@@ -339,6 +404,7 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         self.shadow_value = 0
         self.highlight_value = 0
         self.temperature_value = 0
+        self.threshold_value = 127
         
         # カーブエディタ関連のリセット
         self.use_curve_gamma = False
@@ -362,6 +428,8 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             self._sliders['highlight'].set(0)
         if 'temperature' in self._sliders:
             self._sliders['temperature'].set(0)
+        if 'threshold' in self._sliders:
+            self._sliders['threshold'].set(127)
         
         # パラメータ変更を通知
         self._on_parameter_change()
@@ -372,7 +440,8 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         params: Dict[str, Any] = {
             'shadow': self.shadow_value,
             'highlight': self.highlight_value,
-            'temperature': self.temperature_value
+            'temperature': self.temperature_value,
+            'threshold': self.threshold_value
         }
         
         # ガンマ補正のパラメータは使用モードに応じて変更

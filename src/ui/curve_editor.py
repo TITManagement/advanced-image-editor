@@ -24,7 +24,7 @@ class CurveEditor(ctk.CTkFrame):
     - リアルタイムでLUT (Look-Up Table) を生成
     """
     
-    def __init__(self, parent, width: int = 300, height: int = 300, 
+    def __init__(self, parent, width: int = 255, height: int = 255, 
                  on_curve_change: Optional[Callable] = None):
         super().__init__(parent)
         
@@ -42,6 +42,12 @@ class CurveEditor(ctk.CTkFrame):
         self.curve_color = "#00ff00"
         self.point_color = "#ff0000"
         self.selected_point_color = "#ffff00"
+        
+        # ドラッグ操作用変数
+        self.is_dragging = False
+        self.drag_start_pos = None  # ドラッグ開始時のマウス座標
+        self.drag_start_point = None  # ドラッグ開始時の制御点座標
+        self.click_threshold = 5  # クリックとドラッグを区別するピクセル距離
         
         # パフォーマンス最適化用変数
         self.update_timer = None
@@ -63,8 +69,8 @@ class CurveEditor(ctk.CTkFrame):
             width=self.width, 
             height=self.height,
             bg="#2b2b2b",
-            highlightthickness=1,
-            highlightbackground="#565b5e"
+            highlightthickness=0,  # 境界線を除去
+            bd=0  # ボーダーを除去
         )
         self.canvas.pack(pady=5)
         
@@ -89,17 +95,28 @@ class CurveEditor(ctk.CTkFrame):
         self.info_label.pack()
     
     def _canvas_to_curve(self, canvas_x: int, canvas_y: int) -> Tuple[int, int]:
-        """キャンバス座標をカーブ座標(0-255)に変換"""
-        curve_x = int((canvas_x / self.width) * 255)
-        curve_y = int(255 - (canvas_y / self.height) * 255)  # Y軸は反転
-        curve_x = max(0, min(255, curve_x))
-        curve_y = max(0, min(255, curve_y))
+        """キャンバス座標をカーブ座標(0-255)に変換 - 完全1:1版"""
+        # キャンバスサイズを動的に取得
+        actual_width = self.canvas.winfo_width()
+        actual_height = self.canvas.winfo_height()
+        
+        # キャンバスが初期化されていない場合は設定値を使用
+        if actual_width <= 1 or actual_height <= 1:
+            actual_width = self.width
+            actual_height = self.height
+        
+        # 1:1マッピング（キャンバス座標 = カーブ値）
+        curve_x = max(0, min(255, int(canvas_x)))
+        curve_y = max(0, min(255, int(255 - canvas_y)))  # Y軸反転
+        
         return curve_x, curve_y
     
     def _curve_to_canvas(self, curve_x: int, curve_y: int) -> Tuple[int, int]:
-        """カーブ座標(0-255)をキャンバス座標に変換"""
-        canvas_x = int((curve_x / 255) * self.width)
-        canvas_y = int(self.height - (curve_y / 255) * self.height)  # Y軸は反転
+        """カーブ座標(0-255)をキャンバス座標に変換 - 完全1:1版"""
+        # 1:1マッピング（カーブ値 = キャンバス座標）
+        canvas_x = max(0, min(255, int(curve_x)))
+        canvas_y = max(0, min(255, int(255 - curve_y)))  # Y軸反転
+        
         return canvas_x, canvas_y
     
     def _draw_grid(self):
@@ -263,41 +280,121 @@ class CurveEditor(ctk.CTkFrame):
     
     def _on_click(self, event):
         """マウスクリック処理"""
-        self.selected_point = self._find_point_at(event.x, event.y)
-        self.is_dragging = True
+        self.drag_start_pos = (event.x, event.y)
+        clicked_point = self._find_point_at(event.x, event.y)
         
-        if self.selected_point is None:
+        if clicked_point is None:
             # 新しい制御点を追加
             curve_x, curve_y = self._canvas_to_curve(event.x, event.y)
             self.control_points.append((curve_x, curve_y))
-            self.selected_point = len(self.control_points) - 1
             print(f"📍 制御点追加: ({curve_x}, {curve_y})")
+            self._update_curve()
+            # 制御点追加時はドラッグを無効にする
+            self.selected_point = None
+            self.is_dragging = False
+        else:
+            # 既存の制御点を選択
+            self.selected_point = clicked_point
+            self.drag_start_point = self.control_points[self.selected_point]
+            self.is_dragging = False  # ドラッグはまだ開始しない
+            print(f"🎯 制御点選択: インデックス{self.selected_point}")
         
-        self._update_curve()
-        # ドラッグ中はコールバックを遅延
         self._schedule_callback_update()
     
     def _on_drag(self, event):
         """マウスドラッグ処理"""
-        if self.selected_point is not None and self.is_dragging:
-            curve_x, curve_y = self._canvas_to_curve(event.x, event.y)
+        if (self.selected_point is not None and self.drag_start_pos is not None and 
+            self.drag_start_point is not None):
             
-            # 端点の場合はX座標を固定
-            if self.selected_point == 0:
-                curve_x = 0
-            elif self.selected_point == len(self.control_points) - 1:
-                curve_x = 255
+            # マウス移動距離を計算
+            dx = event.x - self.drag_start_pos[0]
+            dy = event.y - self.drag_start_pos[1]
+            move_distance = (dx * dx + dy * dy) ** 0.5
             
-            self.control_points[self.selected_point] = (curve_x, curve_y)
-            self._update_curve()
-            # ドラッグ中はコールバックを遅延（頻繁な更新を防ぐ）
-            self._schedule_callback_update()
+            print(f"🖱️ ドラッグ: 現在位置({event.x}, {event.y}), 開始位置{self.drag_start_pos}, 移動量({dx}, {dy}), 距離={move_distance:.1f}")
+            
+            # 一定距離以上移動した場合にドラッグ開始
+            if move_distance > self.click_threshold:
+                if not self.is_dragging:
+                    self.is_dragging = True
+                    print(f"🚀 ドラッグ開始: 制御点{self.selected_point}, 元座標{self.drag_start_point}")
+                
+                # 🔧 新しいアプローチ: マウスの現在位置を直接カーブ座標に変換
+                print(f"   現在のマウス位置を直接変換: ({event.x}, {event.y})")
+                curve_x, curve_y = self._canvas_to_curve(event.x, event.y)
+                print(f"   直接変換結果: ({curve_x}, {curve_y})")
+                
+                # 逆変換で確認
+                back_canvas_x, back_canvas_y = self._curve_to_canvas(curve_x, curve_y)
+                canvas_diff_x = abs(event.x - back_canvas_x)
+                canvas_diff_y = abs(event.y - back_canvas_y)
+                print(f"   逆変換確認: カーブ({curve_x}, {curve_y}) → キャンバス({back_canvas_x}, {back_canvas_y})")
+                print(f"   往復変換誤差: X差={canvas_diff_x}, Y差={canvas_diff_y}")
+                
+                # 🔓 制約解除: すべての制御点でX、Y座標ともに自由に移動可能
+                final_point = (curve_x, curve_y)
+                
+                if self.selected_point == 0:
+                    print("   端点(開始): X、Y座標ともに自由に更新")
+                elif self.selected_point == len(self.control_points) - 1:
+                    print("   端点(終了): X、Y座標ともに自由に更新")
+                else:
+                    print("   中間点: X、Y座標ともに更新")
+                
+                # 制御点座標を更新
+                old_point = self.control_points[self.selected_point]
+                self.control_points[self.selected_point] = final_point
+                print(f"   制御点更新: {old_point} → {self.control_points[self.selected_point]}")
+                
+                # 更新後の制御点を再度キャンバス座標に変換して確認
+                final_canvas_x, final_canvas_y = self._curve_to_canvas(final_point[0], final_point[1])
+                
+                # すべての制御点でX、Y座標の両方を評価
+                final_diff_x = abs(event.x - final_canvas_x)
+                final_diff_y = abs(event.y - final_canvas_y)
+                
+                # 制御点タイプに関係なく、統一された評価ロジック
+                point_type = "端点" if (self.selected_point == 0 or self.selected_point == len(self.control_points) - 1) else "中間点"
+                print(f"   {point_type}確認: 制御点({final_point[0]}, {final_point[1]}) → 描画位置({final_canvas_x}, {final_canvas_y})")
+                print(f"   マウス位置({event.x}, {event.y})との差: X差={final_diff_x}, Y差={final_diff_y}")
+                
+                if final_diff_x <= 1 and final_diff_y <= 1:
+                    print(f"   ✅ {point_type}の座標ズレは許容範囲内")
+                else:
+                    print(f"   ⚠️ {point_type}の座標ズレが大きいです")
+                
+                self._update_curve()
+                self._schedule_callback_update()
     
     def _on_release(self, event):
         """マウスリリース処理"""
         if self.is_dragging:
+            # デバッグ情報：マウスリリース時の座標確認
+            release_canvas_x, release_canvas_y = event.x, event.y
+            release_curve_x, release_curve_y = self._canvas_to_curve(release_canvas_x, release_canvas_y)
+            
+            print(f"🖱️ マウスリリース: キャンバス座標({release_canvas_x}, {release_canvas_y}) → カーブ座標({release_curve_x}, {release_curve_y})")
+            
+            if self.selected_point is not None and 0 <= self.selected_point < len(self.control_points):
+                actual_point = self.control_points[self.selected_point]
+                
+                # 🔓 制約解除: すべての制御点でX、Y座標ともに評価
+                x_diff = abs(actual_point[0] - release_curve_x)
+                y_diff = abs(actual_point[1] - release_curve_y)
+                
+                point_type = "端点" if (self.selected_point == 0 or self.selected_point == len(self.control_points) - 1) else "中間点"
+                print(f"📍 {point_type}制御点: {actual_point}")
+                print(f"📏 座標ズレ: X差={x_diff}, Y差={y_diff}")
+                
+                if x_diff <= 1 and y_diff <= 1:
+                    print(f"✅ {point_type}の座標ズレは許容範囲内")
+                else:
+                    print(f"⚠️ {point_type}の座標ズレが大きいです")
+            
             self.is_dragging = False
             self.selected_point = None
+            self.drag_start_pos = None
+            self.drag_start_point = None
             self._update_curve()
             # リリース時は即座にコールバック実行
             if self.update_timer:
@@ -336,6 +433,8 @@ class CurveEditor(ctk.CTkFrame):
         self.control_points = [(0, 0), (255, 255)]
         self.selected_point = None
         self.is_dragging = False
+        self.drag_start_pos = None
+        self.drag_start_point = None
         print("🔄 カーブリセット: 線形曲線に戻しました")
         self._update_curve()
         # リセット時は即座にコールバック実行
@@ -381,6 +480,9 @@ class CurveEditor(ctk.CTkFrame):
         if len(control_points) >= 2:
             self.control_points = control_points.copy()
             self.selected_point = None
+            self.is_dragging = False
+            self.drag_start_pos = None
+            self.drag_start_point = None
             self._update_curve()
     
     def get_curve(self) -> List[Tuple[int, int]]:

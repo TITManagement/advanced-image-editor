@@ -27,6 +27,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self.blur_strength = 0
         self.sharpen_strength = 0
         self.current_filter = "none"
+        self.morph_kernel_size = 5
         
     def get_display_name(self) -> str:
         return "フィルター処理"
@@ -86,6 +87,68 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             command=lambda: self._apply_special_filter("edge")
         )
         
+        # モルフォロジー演算セクション
+        morph_frame = ctk.CTkFrame(parent)
+        morph_frame.pack(fill="x", padx=5, pady=5)
+        
+        ctk.CTkLabel(morph_frame, text="モルフォロジー演算", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        
+        # カーネルサイズ
+        self._sliders['kernel'], self._labels['kernel'] = PluginUIHelper.create_slider_with_label(
+            parent=morph_frame,
+            text="カーネルサイズ",
+            from_=3,
+            to=15,
+            default_value=5,
+            command=self._on_kernel_change,
+            value_format="{:.0f}"
+        )
+        
+        # モルフォロジー演算ボタン群
+        morph_buttons_frame = ctk.CTkFrame(morph_frame)
+        morph_buttons_frame.pack(fill="x", padx=5, pady=5)
+        
+        self._buttons['erosion'] = PluginUIHelper.create_button(
+            morph_buttons_frame,
+            text="侵食",
+            command=lambda: self._apply_morphology("erosion"),
+            width=80
+        )
+        
+        self._buttons['dilation'] = PluginUIHelper.create_button(
+            morph_buttons_frame,
+            text="膨張",
+            command=lambda: self._apply_morphology("dilation"),
+            width=80
+        )
+        
+        self._buttons['opening'] = PluginUIHelper.create_button(
+            morph_buttons_frame,
+            text="開放",
+            command=lambda: self._apply_morphology("opening"),
+            width=80
+        )
+        
+        self._buttons['closing'] = PluginUIHelper.create_button(
+            morph_buttons_frame,
+            text="閉鎖",
+            command=lambda: self._apply_morphology("closing"),
+            width=80
+        )
+        
+        # 輪郭検出セクション
+        contour_frame = ctk.CTkFrame(parent)
+        contour_frame.pack(fill="x", padx=5, pady=5)
+        
+        ctk.CTkLabel(contour_frame, text="輪郭検出", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        
+        # 輪郭検出ボタン
+        self._buttons['contour'] = PluginUIHelper.create_button(
+            contour_frame,
+            text="輪郭検出",
+            command=self._apply_contour_detection
+        )
+        
         # リセットボタン
         self._buttons['reset'] = PluginUIHelper.create_button(
             parent,
@@ -109,6 +172,13 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         print(f"🔪 シャープニング強度更新: {self.sharpen_strength}")
         self._on_parameter_change()
     
+    def _on_kernel_change(self, value: float) -> None:
+        """カーネルサイズ変更時の処理"""
+        self.morph_kernel_size = int(value)
+        if self.morph_kernel_size % 2 == 0:  # 奇数にする
+            self.morph_kernel_size += 1
+        print(f"🔧 カーネルサイズ更新: {self.morph_kernel_size}")
+    
     def _apply_special_filter(self, filter_type: str) -> None:
         """特殊フィルター適用"""
         self.current_filter = filter_type
@@ -116,9 +186,29 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         if hasattr(self, 'special_filter_callback'):
             self.special_filter_callback(filter_type)
     
+    def _apply_morphology(self, morph_type: str) -> None:
+        """モルフォロジー演算適用"""
+        print(f"🔧 モルフォロジー演算: {morph_type}")
+        if hasattr(self, 'morphology_callback'):
+            self.morphology_callback(morph_type)
+    
+    def _apply_contour_detection(self) -> None:
+        """輪郭検出実行"""
+        print(f"🎯 輪郭検出実行")
+        if hasattr(self, 'contour_callback'):
+            self.contour_callback()
+    
     def set_special_filter_callback(self, callback):
         """特殊フィルター用のコールバックを設定"""
         self.special_filter_callback = callback
+    
+    def set_morphology_callback(self, callback):
+        """モルフォロジー演算用のコールバックを設定"""
+        self.morphology_callback = callback
+    
+    def set_contour_callback(self, callback):
+        """輪郭検出用のコールバックを設定"""
+        self.contour_callback = callback
     
     def process_image(self, image: Image.Image, **params) -> Image.Image:
         """フィルター処理を適用"""
@@ -222,6 +312,68 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             print(f"❌ 特殊フィルターエラー ({filter_type}): {e}")
             return image
     
+    def apply_morphology_operation(self, image: Image.Image, operation: str) -> Image.Image:
+        """モルフォロジー演算を適用"""
+        try:
+            print(f"🔧 モルフォロジー演算開始: {operation}")
+            
+            # OpenCVフォーマットに変換
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            
+            # カーネル作成
+            kernel = np.ones((self.morph_kernel_size, self.morph_kernel_size), np.uint8)
+            
+            # モルフォロジー演算実行
+            if operation == "erosion":
+                result = cv2.erode(gray_image, kernel, iterations=1)
+            elif operation == "dilation":
+                result = cv2.dilate(gray_image, kernel, iterations=1)
+            elif operation == "opening":
+                result = cv2.morphologyEx(gray_image, cv2.MORPH_OPEN, kernel)
+            elif operation == "closing":
+                result = cv2.morphologyEx(gray_image, cv2.MORPH_CLOSE, kernel)
+            else:
+                result = gray_image
+            
+            # グレースケールをRGBに変換してPIL形式に戻す
+            result_rgb = cv2.cvtColor(result, cv2.COLOR_GRAY2RGB)
+            result_image = Image.fromarray(result_rgb)
+            
+            print(f"✅ モルフォロジー演算完了: {operation}")
+            return result_image
+            
+        except Exception as e:
+            print(f"❌ モルフォロジー演算エラー ({operation}): {e}")
+            return image
+    
+    def apply_contour_detection(self, image: Image.Image) -> Image.Image:
+        """輪郭検出を適用"""
+        try:
+            print(f"🎯 輪郭検出開始")
+            
+            # OpenCVフォーマットに変換
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            
+            # 輪郭検出
+            contours, _ = cv2.findContours(gray_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 元画像に輪郭を描画
+            result_image = cv_image.copy()
+            cv2.drawContours(result_image, contours, -1, (0, 255, 0), 2)
+            
+            # PIL形式に戻す
+            result_rgb = cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB)
+            final_image = Image.fromarray(result_rgb)
+            
+            print(f"✅ 輪郭検出完了: {len(contours)}個の輪郭を検出")
+            return final_image
+            
+        except Exception as e:
+            print(f"❌ 輪郭検出エラー: {e}")
+            return image
+    
     def reset_parameters(self) -> None:
         """パラメータをリセット"""
         print(f"🔄 フィルターパラメータリセット")
@@ -233,12 +385,15 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self.blur_strength = 0
         self.sharpen_strength = 0
         self.current_filter = "none"
+        self.morph_kernel_size = 5
         
         # スライダーの値を明示的に設定してコールバックを強制実行
         if 'blur' in self._sliders:
             self._sliders['blur'].set(0)
         if 'sharpen' in self._sliders:
             self._sliders['sharpen'].set(0)
+        if 'kernel' in self._sliders:
+            self._sliders['kernel'].set(5)
         
         # パラメータ変更を通知
         self._on_parameter_change()
@@ -248,5 +403,6 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         return {
             'blur': self.blur_strength,
             'sharpen': self.sharpen_strength,
-            'filter': self.current_filter
+            'filter': self.current_filter,
+            'kernel': self.morph_kernel_size
         }

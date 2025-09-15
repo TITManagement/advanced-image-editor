@@ -3,10 +3,14 @@
 Advanced Image Editor - Plugin System Version
 プラグインシステム対応版画像編集アプリケーション
 
-【概要】
-1865行だったmain.pyをプラグインシステムで分割・整理した高度な画像編集アプリケーション。
-モジュラー設計により保守性・拡張性・可読性を大幅に向上。
+## 概要
 
+プラグインシステムを採用した高度な画像編集アプリケーションです。
+モジュラー設計により、各機能は独立したプラグインとして実装されており、
+優れた保守性・拡張性・可読性を実現しています。
+
+4つの専門プラグイン（基本調整・濃度調整・フィルター処理・画像解析）により、
+基本的な画像補正から高度な画像解析まで幅広い画像編集機能を提供します。
 
 【実行方法】
 cd <本リポジトリのクローン先ディレクトリ>
@@ -18,7 +22,7 @@ cd <本リポジトリのクローン先ディレクトリ>
 
 【作成者】GitHub Copilot + プラグインシステム設計
 【バージョン】Plugin System 1.0.0
-【最終更新】2025年9月13日
+【最終更新】2025年9月15日
 """
 
 try:
@@ -69,7 +73,7 @@ try:
     from plugins.basic import BasicAdjustmentPlugin
     from plugins.density import DensityAdjustmentPlugin
     from plugins.filters import FilterProcessingPlugin
-    from plugins.advanced import AdvancedProcessingPlugin
+    from plugins.analysis import ImageAnalysisPlugin
     print("✅ プラグインシステムのインポートが完了しました")
 except ImportError as e:
     print(f"❌ プラグインシステムインポートエラー: {e}")
@@ -148,7 +152,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             "basic_adjustment": "🎯 基本調整",
             "density_adjustment": "🌈 濃度調整", 
             "filter_processing": "🌀 フィルター",
-            "advanced_processing": "🔧 高度処理"
+            "image_analysis": "🔬 画像解析"
         }
         
         # UIクラスでタブを作成
@@ -167,23 +171,25 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
         density_plugin = DensityAdjustmentPlugin()
         density_plugin.set_parameter_change_callback(self.on_plugin_parameter_change)
         density_plugin.set_histogram_callback(self.apply_histogram_equalization)
+        density_plugin.set_threshold_callback(self.apply_binary_threshold)
         self.plugin_manager.register_plugin(density_plugin)
         
         # フィルター処理プラグイン
         filter_plugin = FilterProcessingPlugin()
         filter_plugin.set_parameter_change_callback(self.on_plugin_parameter_change)
         filter_plugin.set_special_filter_callback(self.apply_special_filter)
+        filter_plugin.set_morphology_callback(self.apply_morphology_operation)
+        filter_plugin.set_contour_callback(self.apply_contour_detection)
         self.plugin_manager.register_plugin(filter_plugin)
         
-        # 高度処理プラグイン
-        advanced_plugin = AdvancedProcessingPlugin()
-        advanced_plugin.set_morphology_callback(self.apply_morphology_operation)
-        advanced_plugin.set_threshold_callback(self.apply_binary_threshold)
-        advanced_plugin.set_contour_callback(self.apply_contour_detection)
-        self.plugin_manager.register_plugin(advanced_plugin)
-        
-        # プラグインUIをタブに配置
-        # self.create_plugin_tabs() は setup_plugins() の最後で呼ばれるので不要
+        # 画像解析プラグイン（旧：高度処理プラグイン）
+        analysis_plugin = ImageAnalysisPlugin()
+        analysis_plugin.set_histogram_callback(self.show_histogram_analysis)
+        analysis_plugin.set_feature_callback(self.apply_feature_detection)
+        analysis_plugin.set_frequency_callback(self.apply_frequency_analysis)
+        analysis_plugin.set_blur_callback(self.detect_blur)
+        analysis_plugin.set_noise_callback(self.analyze_noise)
+        self.plugin_manager.register_plugin(analysis_plugin)
         
         print(f"✅ {len(self.plugin_manager.plugins)}個のプラグインが登録されました")
     
@@ -295,47 +301,182 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             import traceback
             traceback.print_exc()
     
-    def apply_morphology_operation(self, operation: str):
-        """モルフォロジー演算を適用"""
-        try:
-            current_image = self.image_editor.get_current_image()
-            if not current_image:
-                return
-            
-            # モルフォロジー演算処理はプラグインで実行されるため、ここでは状態更新のみ
-            self.image_editor.status_label.configure(text=f"🔧 {operation}演算を適用しました")
-                
-        except Exception as e:
-            print(f"❌ モルフォロジー演算エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"モルフォロジー演算エラー: {e}")
-    
     def apply_binary_threshold(self):
         """2値化を適用"""
         try:
             current_image = self.image_editor.get_current_image()
             if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 2値化処理はプラグインで実行されるため、ここでは状態更新のみ
-            self.image_editor.status_label.configure(text="📐 2値化を適用しました")
+            # 濃度調整プラグインから2値化を実行
+            density_plugin = self.plugin_manager.get_plugin('density_adjustment')
+            if density_plugin and hasattr(density_plugin, 'apply_binary_threshold'):
+                apply_method = getattr(density_plugin, 'apply_binary_threshold')
+                processed_image = apply_method(current_image)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text="📐 2値化を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 濃度調整プラグインが見つかりません")
                 
         except Exception as e:
             print(f"❌ 2値化エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"2値化エラー: {e}")
+    
+    def apply_morphology_operation(self, operation: str):
+        """モルフォロジー演算を適用"""
+        try:
+            current_image = self.image_editor.get_current_image()
+            if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
+                return
+            
+            # フィルター処理プラグインからモルフォロジー演算を実行
+            filter_plugin = self.plugin_manager.get_plugin('filter_processing')
+            if filter_plugin and hasattr(filter_plugin, 'apply_morphology_operation'):
+                apply_method = getattr(filter_plugin, 'apply_morphology_operation')
+                processed_image = apply_method(current_image, operation)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text=f"🔧 {operation}演算を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ フィルター処理プラグインが見つかりません")
+                
+        except Exception as e:
+            print(f"❌ モルフォロジー演算エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"モルフォロジー演算エラー: {e}")
     
     def apply_contour_detection(self):
         """輪郭検出を適用"""
         try:
             current_image = self.image_editor.get_current_image()
             if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
             
-            # 輪郭検出処理はプラグインで実行されるため、ここでは状態更新のみ
-            self.image_editor.status_label.configure(text="🎯 輪郭検出を適用しました")
+            # フィルター処理プラグインから輪郭検出を実行
+            filter_plugin = self.plugin_manager.get_plugin('filter_processing')
+            if filter_plugin and hasattr(filter_plugin, 'apply_contour_detection'):
+                apply_method = getattr(filter_plugin, 'apply_contour_detection')
+                processed_image = apply_method(current_image)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text="🎯 輪郭検出を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ フィルター処理プラグインが見つかりません")
                 
         except Exception as e:
             print(f"❌ 輪郭検出エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"輪郭検出エラー: {e}")
+    
+    def show_histogram_analysis(self):
+        """ヒストグラム解析を表示"""
+        try:
+            current_image = self.image_editor.get_current_image()
+            if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
+                return
+            
+            # 簡易ヒストグラム解析を実行（詳細な解析は今後実装）
+            self.image_editor.status_label.configure(text="📊 ヒストグラム解析機能（実装予定）")
+            print("📊 ヒストグラム解析機能が実行されました（実装予定）")
+                
+        except Exception as e:
+            print(f"❌ ヒストグラム解析エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"ヒストグラム解析エラー: {e}")
+    
+    def apply_feature_detection(self, feature_type: str):
+        """特徴点検出を適用"""
+        try:
+            current_image = self.image_editor.get_current_image()
+            if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
+                return
+            
+            # 画像解析プラグインから特徴点検出を実行
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'apply_feature_detection'):
+                apply_method = getattr(analysis_plugin, 'apply_feature_detection')
+                processed_image = apply_method(current_image, feature_type)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text=f"🎯 {feature_type}特徴点検出を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
+                
+        except Exception as e:
+            print(f"❌ 特徴点検出エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"特徴点検出エラー: {e}")
+    
+    def apply_frequency_analysis(self, analysis_type: str):
+        """周波数解析を適用"""
+        try:
+            current_image = self.image_editor.get_current_image()
+            if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
+                return
+            
+            # 画像解析プラグインから周波数解析を実行
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'apply_frequency_analysis'):
+                apply_method = getattr(analysis_plugin, 'apply_frequency_analysis')
+                processed_image = apply_method(current_image, analysis_type)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text=f"🔬 {analysis_type}解析を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
+                
+        except Exception as e:
+            print(f"❌ 周波数解析エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"周波数解析エラー: {e}")
+    
+    def detect_blur(self):
+        """ブラー検出を実行"""
+        try:
+            current_image = self.image_editor.get_current_image()
+            if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
+                return
+            
+            # 画像解析プラグインからブラー検出を実行
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'detect_blur'):
+                apply_method = getattr(analysis_plugin, 'detect_blur')
+                processed_image = apply_method(current_image)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text="🔍 ブラー検出を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
+                
+        except Exception as e:
+            print(f"❌ ブラー検出エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"ブラー検出エラー: {e}")
+    
+    def analyze_noise(self):
+        """ノイズ解析を実行"""
+        try:
+            current_image = self.image_editor.get_current_image()
+            if not current_image:
+                self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
+                return
+            
+            # 画像解析プラグインからノイズ解析を実行
+            analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if analysis_plugin and hasattr(analysis_plugin, 'analyze_noise'):
+                apply_method = getattr(analysis_plugin, 'analyze_noise')
+                processed_image = apply_method(current_image)
+                self.image_editor.update_current_image(processed_image)
+                self.image_editor.display_image(processed_image)
+                self.image_editor.status_label.configure(text="📈 ノイズ解析を適用しました")
+            else:
+                self.image_editor.status_label.configure(text="❌ 画像解析プラグインが見つかりません")
+                
+        except Exception as e:
+            print(f"❌ ノイズ解析エラー: {e}")
+            MessageDialog.show_error(self, "エラー", f"ノイズ解析エラー: {e}")
     
     # 画像操作メソッド（ImageEditorクラスに委譲）
     def load_image(self):
@@ -376,157 +517,6 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             MessageDialog.show_error(self, "エラー", f"リセットエラー: {e}")
             import traceback
             traceback.print_exc()
-
-
-if __name__ == "__main__":
-    
-    def load_image(self):
-        """画像を読み込み"""
-        try:
-            file_path = filedialog.askopenfilename(
-                title="画像ファイルを選択",
-                filetypes=[
-                    ("画像ファイル", "*.jpg *.jpeg *.png *.bmp *.tiff *.webp"),
-                    ("すべてのファイル", "*.*")
-                ]
-            )
-            
-            if file_path:
-                image = Image.open(file_path)
-                if image.mode != 'RGB':
-                    image = image.convert('RGB')
-                
-                self.original_image = image.copy()
-                self.current_image = image.copy()
-                self.display_image(image)
-                self.status_label.configure(text=f"✅ 画像読み込み: {os.path.basename(file_path)}")
-                print(f"✅ 画像読み込み: {file_path}")
-                
-        except Exception as e:
-            print(f"❌ 画像読み込みエラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"画像読み込みエラー: {e}")
-    
-    def load_default_image(self):
-        """デフォルト画像を読み込み"""
-        try:
-            # デフォルト画像パスを探索（環境非依存の相対パスに変更）
-            default_paths = [
-                os.path.join("SampleImage", "IMG_1307.jpeg"),
-                os.path.join("SampleImage", "IMG_1308.jpeg")
-            ]
-            
-            for path in default_paths:
-                if os.path.exists(path):
-                    image = Image.open(path)
-                    if image.mode != 'RGB':
-                        image = image.convert('RGB')
-                    
-                    self.original_image = image.copy()
-                    self.current_image = image.copy()
-                    self.display_image(image)
-                    self.status_label.configure(text=f"✅ デフォルト画像読み込み: {os.path.basename(path)}")
-                    print(f"✅ デフォルト画像読み込み: {path}")
-                    return
-            
-            print("ℹ️ デフォルト画像が見つかりませんでした")
-            
-        except Exception as e:
-            print(f"⚠️ デフォルト画像読み込み警告: {e}")
-    
-    def save_image(self):
-        """画像を保存"""
-        try:
-            if not self.current_image:
-                MessageDialog.show_warning(self, "警告", "保存する画像がありません")
-                return
-            
-            file_path = filedialog.asksaveasfilename(
-                title="画像を保存",
-                defaultextension=".jpg",
-                filetypes=[
-                    ("JPEG", "*.jpg"),
-                    ("PNG", "*.png"),
-                    ("BMP", "*.bmp"),
-                    ("TIFF", "*.tiff")
-                ]
-            )
-            
-            if file_path:
-                self.current_image.save(file_path)
-                self.status_label.configure(text=f"💾 画像保存完了: {os.path.basename(file_path)}")
-                print(f"✅ 画像保存: {file_path}")
-                
-        except Exception as e:
-            print(f"❌ 画像保存エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"画像保存エラー: {e}")
-    
-    def display_image(self, image: Image.Image):
-        """画像をキャンバスに表示"""
-        try:
-            if not image:
-                return
-            
-            # キャンバスサイズを取得
-            self.canvas.update()
-            canvas_width = self.canvas.winfo_width()
-            canvas_height = self.canvas.winfo_height()
-            
-            if canvas_width <= 1 or canvas_height <= 1:
-                self.after(100, lambda: self.display_image(image))
-                return
-            
-            # 画像をキャンバスサイズに合わせてリサイズ
-            img_width, img_height = image.size
-            scale = min(canvas_width / img_width, canvas_height / img_height)
-            
-            new_width = int(img_width * scale)
-            new_height = int(img_height * scale)
-            
-            resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-            
-            # Tkinter用に変換
-            self.photo = ImageTk.PhotoImage(resized_image)
-            
-            # キャンバスをクリアして画像を描画
-            self.canvas.delete("all")
-            x = (canvas_width - new_width) // 2
-            y = (canvas_height - new_height) // 2
-            self.canvas.create_image(x, y, anchor="nw", image=self.photo)
-            
-        except Exception as e:
-            print(f"❌ 画像表示エラー: {e}")
-    
-    def reset_to_original(self):
-        """元画像に復元"""
-        try:
-            if self.original_image:
-                self.current_image = self.original_image.copy()
-                self.display_image(self.current_image)
-                self.status_label.configure(text="🔄 元画像に復元しました")
-                print("✅ 元画像復元完了")
-            else:
-                MessageDialog.show_warning(self, "警告", "元画像がありません")
-                
-        except Exception as e:
-            print(f"❌ 元画像復元エラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"元画像復元エラー: {e}")
-    
-    def reset_all_plugins(self):
-        """全プラグインのパラメータをリセット"""
-        try:
-            for plugin in self.plugin_manager.get_all_plugins():
-                plugin.reset_parameters()
-            
-            if self.original_image:
-                self.current_image = self.original_image.copy()
-                self.display_image(self.current_image)
-            
-            self.status_label.configure(text="🔧 全プラグインをリセットしました")
-            print("✅ 全プラグインリセット完了")
-            
-        except Exception as e:
-            print(f"❌ プラグインリセットエラー: {e}")
-            MessageDialog.show_error(self, "エラー", f"リセットエラー: {e}")
 
 
 def main():
