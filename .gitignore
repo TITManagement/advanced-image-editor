@@ -36,6 +36,9 @@ venv.bak/
 *.swo
 *~
 
+# VS Code Workspace (個人環境設定)
+simple-workspace.code-workspace
+
 # OS
 .DS_Store
 .DS_Store?
