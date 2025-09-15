@@ -44,6 +44,8 @@ src/
 
 ## インストール方法
 
+> 💡 **依存関係管理について**: このプロジェクトは`pyproject.toml`（推奨）と`requirements.txt`（従来方法）の両方をサポートしています。詳細は「[依存関係管理の詳細](#依存関係管理の詳細)」セクションをご覧ください。
+
 ### 前提条件
 
 このプロジェクトは外部ライブラリ`gui_framework`に依存しています。  
@@ -91,6 +93,22 @@ python -m venv .venv
 
 #### 3. 依存関係のインストール
 
+**方法1: pyproject.toml使用（推奨・モダンな方法）**
+```bash
+# macOS / Linux - 基本インストール
+.venv/bin/pip install -e .
+
+# macOS / Linux - 開発用ツールも含める
+.venv/bin/pip install -e .[dev]
+
+# Windows - 基本インストール
+.venv\Scripts\pip.exe install -e .
+
+# Windows - 開発用ツールも含める
+.venv\Scripts\pip.exe install -e .[dev]
+```
+
+**方法2: requirements.txt使用（シンプル・従来方法）**
 ```bash
 # macOS / Linux
 .venv/bin/pip install -r requirements.txt
@@ -421,6 +439,52 @@ button = PluginUIHelper.create_button(
 
 gui_frameworkライブラリが利用可能な場合は高度なUI機能を使用。
 利用できない場合は基本機能のみで動作（フォールバック対応済み）。
+
+## 依存関係管理の詳細
+
+このプロジェクトは、**pyproject.toml**と**requirements.txt**の2つの依存関係管理方法をサポートしています。
+
+### **pyproject.toml（推奨）**
+```bash
+# 基本インストール
+pip install -e .
+
+# 開発用ツールも含める
+pip install -e .[dev]
+
+# 高速化ライブラリも含める
+pip install -e .[performance]
+
+# プラットフォーム固有の依存関係も含める
+pip install -e .[windows]  # Windows用
+pip install -e .[macos]    # macOS用
+pip install -e .[linux]    # Linux用
+```
+
+**利点:**
+- ✅ **統一管理**: プロジェクト情報と依存関係が1ファイルで管理
+- ✅ **オプション依存**: 必要に応じて追加機能をインストール
+- ✅ **標準化**: Python公式推奨の現代的な方法
+- ✅ **スクリプト登録**: `advanced-image-editor`コマンドでの実行が可能
+
+### **requirements.txt（従来方法）**
+```bash
+pip install -r requirements.txt
+```
+
+**利点:**
+- ✅ **シンプル**: 基本的な依存関係のみを明確に列挙
+- ✅ **CI/CD親和性**: 多くのCI/CDシステムで標準サポート
+- ✅ **互換性**: 古いPython環境やツールとの互換性
+
+### **使い分けガイド**
+
+| 用途 | 推奨方法 | 理由 |
+|------|----------|------|
+| **開発・本格使用** | `pyproject.toml` | 全機能・開発ツール・プラットフォーム最適化 |
+| **簡易セットアップ** | `requirements.txt` | 最小限の依存関係で迅速な動作確認 |
+| **CI/CDパイプライン** | `requirements.txt` | シンプルで予測可能な環境構築 |
+| **配布・パッケージ化** | `pyproject.toml` | メタデータ・スクリプト登録・標準化 |
 
 ## トラブルシューティング
 

@@ -191,6 +191,11 @@ python scripts/build_distribution.py
 - **科学計算**: `scipy`, `scikit-image`
 - **配布**: `PyInstaller`
 
+> 💡 **依存関係インストール方法**:  
+> **推奨**: `pip install -e .[dev]` (pyproject.toml使用)  
+> **従来**: `pip install -r requirements.txt` (requirements.txt使用)  
+> 詳細は [メインREADME.md](../README.md#依存関係管理の詳細) を参照
+
 ### 🏗️ **ビルドプロセス**
 1. **環境準備**: `setup_dev_environment.py`
 2. **検証**: `comprehensive_verification.py`
