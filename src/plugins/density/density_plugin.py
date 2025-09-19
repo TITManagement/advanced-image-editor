@@ -184,8 +184,6 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
     def _on_gamma_change(self, value: float) -> None:
         """ガンマ値変更時の処理"""
         self.gamma_value = float(value)
-        if hasattr(self, '_labels') and 'gamma' in self._labels:
-            self._labels['gamma'].configure(text=f"{self.gamma_value:.2f}")
         print(f"🔍 ガンマ値更新: {self.gamma_value:.2f}")
         self._on_parameter_change()
     
@@ -209,6 +207,35 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
                 self.gamma_curve_frame.pack(fill="x", padx=5, pady=5)
         
         self._on_parameter_change()
+    
+    def _on_curve_change(self, lut: np.ndarray) -> None:
+        """カーブ変更時の処理"""
+        self.gamma_lut = lut
+        print(f"📈 カーブ更新: LUT設定完了")
+        self._on_parameter_change()
+    
+    def _on_shadow_change(self, value: float) -> None:
+        """シャドウ値変更時の処理"""
+        self.shadow_value = int(value)
+        print(f"🌑 シャドウ値更新: {self.shadow_value}")
+        self._on_parameter_change()
+    
+    def _on_highlight_change(self, value: float) -> None:
+        """ハイライト値変更時の処理"""
+        self.highlight_value = int(value)
+        print(f"💡 ハイライト値更新: {self.highlight_value}")
+        self._on_parameter_change()
+    
+    def _on_temperature_change(self, value: float) -> None:
+        """色温度値変更時の処理"""
+        self.temperature_value = int(value)
+        print(f"🌡️ 色温度値更新: {self.temperature_value}")
+        self._on_parameter_change()
+    
+    def _on_threshold_change(self, value: float) -> None:
+        """閾値変更時の処理"""
+        self.threshold_value = int(value)
+        print(f"📐 閾値更新: {self.threshold_value}")
     
     def _on_curve_change(self, lut: np.ndarray) -> None:
         """カーブ変更時の処理"""

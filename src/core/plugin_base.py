@@ -214,7 +214,7 @@ class PluginUIHelper:
         value_format: str = "{:.1f}"
     ) -> Tuple[ctk.CTkSlider, ctk.CTkLabel]:
         """
-        ラベル付きスライダーを作成
+        ラベル付きスライダーを作成（マウスリリース対応）
         Args:
             parent: 親フレーム
             text: ラベルテキスト
@@ -234,24 +234,57 @@ class PluginUIHelper:
         value_label = ctk.CTkLabel(parent, text=value_format.format(default_value), font=("Arial", 9))
         value_label.pack(anchor="w", padx=3)
         
-        # スライダー
+        # コールバック処理関数
+        def handle_slider_change(value):
+            # 【重要】CustomTkinterスライダーの値オーバーシュート対策
+            # ドラッグ中に内部的に範囲外の値が渡される場合があるため、
+            # 明示的に範囲チェックして正しい値に修正する
+            clamped_value = max(from_, min(to, value))
+            
+            # 【UI応答性】値ラベルを即座に更新（範囲修正済みの値で）
+            # ユーザーにリアルタイムフィードバックを提供
+            value_label.configure(text=value_format.format(clamped_value))
+            
+            # 【デバッグ】値の変化を監視
+            if abs(value - clamped_value) > 0.001:  # 値が範囲外の場合
+                print(f"⚠️ スライダー値修正: {value:.3f} → {clamped_value:.3f} (範囲: {from_}〜{to})")
+            
+            # 【コールバック最適化】プラグインコールバックを呼び出し（範囲修正済みの値で）
+            # 二重コールバック問題を回避し、正確な値のみを渡す
+            if command:
+                command(clamped_value)
+        
+        # スライダー作成
         slider = ctk.CTkSlider(
             parent,
             from_=from_,
             to=to,
-            command=command
+            command=handle_slider_change
         )
         slider.set(default_value)
-        slider.default_value = default_value
-        slider.pack(fill="x", padx=5, pady=3)
         
-        # 値ラベル更新用のヘルパー関数を追加
-        def update_value_label(value):
-            value_label.configure(text=value_format.format(value))
+        # 【重要】CustomTkinterスライダーのマウスリリース対策
+        # CustomTkinterではドラッグ中とマウスリリース後でイベント処理が異なる場合があり、
+        # マウスリリース時に正確な最終値でコールバックを確実に実行する
+        def on_mouse_release(event):
             if command:
-                command(value)
+                current_value = slider.get()
+                # 【値精度保証】範囲チェック
+                clamped_value = max(from_, min(to, current_value))
+                print(f"🖱️ マウスリリース: 値={current_value:.3f}, 修正後={clamped_value:.3f}")
+                # 【スライダー同期】修正された値でスライダーを再設定
+                if abs(current_value - clamped_value) > 0.001:
+                    slider.set(clamped_value)
+                command(clamped_value)
         
-        slider.configure(command=update_value_label)
+        # 【イベントバインディング】マウスリリースイベントをバインド
+        # CustomTkinterの内部実装によるイベントタイミング問題への対策
+        slider.bind("<ButtonRelease-1>", on_mouse_release)
+        
+        # カスタム属性として保存
+        setattr(slider, 'default_value', default_value)
+        
+        slider.pack(fill="x", padx=5, pady=3)
         
         return slider, value_label
     

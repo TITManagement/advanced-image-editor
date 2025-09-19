@@ -77,25 +77,30 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     
     def _on_brightness_change(self, value: float) -> None:
         """明度値変更時の処理"""
+        old_value = self.brightness_value
         self.brightness_value = int(value)
-        if hasattr(self, '_labels') and 'brightness' in self._labels:
-            self._labels['brightness'].configure(text=f"{self.brightness_value}")
-        print(f"🔆 明度値更新: {self.brightness_value}")
+        
+        # 【UIアプリ重要対策】詳細ログで値の変化を監視（本番では削除可能）
+        # スライダーの挙動問題をデバッグするための仕組み
+        print(f"🔆 明度コールバック: 受信値={value:.3f}, 設定値={self.brightness_value}, 前回値={old_value}")
+        
+        # 【エラー検出】範囲外チェック（CustomTkinter特有の問題検出用）
+        if value < -100 or value > 100:
+            print(f"⚠️ 明度値が範囲外: {value:.3f} (有効範囲: -100〜100)")
+        
+        # 【コールバック最適化】基底クラスの統一コールバックシステムを使用
+        # 画像処理の実行をトリガーする
         self._on_parameter_change()
     
     def _on_contrast_change(self, value: float) -> None:
         """コントラスト値変更時の処理"""
         self.contrast_value = int(value)
-        if hasattr(self, '_labels') and 'contrast' in self._labels:
-            self._labels['contrast'].configure(text=f"{self.contrast_value}")
         print(f"📊 コントラスト値更新: {self.contrast_value}")
         self._on_parameter_change()
     
     def _on_saturation_change(self, value: float) -> None:
         """彩度値変更時の処理"""
         self.saturation_value = int(value)
-        if hasattr(self, '_labels') and 'saturation' in self._labels:
-            self._labels['saturation'].configure(text=f"{self.saturation_value}")
         print(f"🌈 彩度値更新: {self.saturation_value}")
         self._on_parameter_change()
     

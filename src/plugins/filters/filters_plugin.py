@@ -240,16 +240,12 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     def _on_blur_change(self, value: float) -> None:
         """ブラー強度変更時の処理"""
         self.blur_strength = int(value)
-        if hasattr(self, '_labels') and 'blur' in self._labels:
-            self._labels['blur'].configure(text=f"{self.blur_strength}")
         print(f"🌀 ブラー強度更新: {self.blur_strength}")
         self._on_parameter_change()
     
     def _on_sharpen_change(self, value: float) -> None:
         """シャープニング強度変更時の処理"""
         self.sharpen_strength = float(value)
-        if hasattr(self, '_labels') and 'sharpen' in self._labels:
-            self._labels['sharpen'].configure(text=f"{self.sharpen_strength:.1f}")
         print(f"🔪 シャープニング強度更新: {self.sharpen_strength}")
         self._on_parameter_change()
     
