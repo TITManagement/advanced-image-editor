@@ -1,6 +1,6 @@
 # 基本依存関係（必須）
 numpy>=1.24.0
-opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0  # SIFT/ORB等の高度な特徴点検出機能を利用する場合はこちらを推奨
 customtkinter>=5.2.0
 Pillow>=10.0.0
 scipy>=1.11.0
