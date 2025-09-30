@@ -18,6 +18,38 @@ from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
 
 
 class BasicAdjustmentPlugin(ImageProcessorPlugin):
+    def setup_ui(self, parent: ctk.CTkFrame) -> None:
+        """基本調整タブのUI生成（明るさ・コントラスト・彩度）"""
+        frame = ctk.CTkFrame(parent)
+        frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(frame, text="基本調整", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        # 明るさ
+        brightness_row = ctk.CTkFrame(frame)
+        brightness_row.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(brightness_row, text="明るさ").pack(side="left", padx=(0, 5))
+        brightness_slider = ctk.CTkSlider(brightness_row, from_=-100, to=100, number_of_steps=200, command=self._on_brightness_change)
+        brightness_slider.set(self.brightness_value)
+        brightness_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        undo_brightness_btn = ctk.CTkButton(brightness_row, text="🔄 取消", command=lambda: brightness_slider.set(0))
+        undo_brightness_btn.pack(side="left")
+        # コントラスト
+        contrast_row = ctk.CTkFrame(frame)
+        contrast_row.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(contrast_row, text="コントラスト").pack(side="left", padx=(0, 5))
+        contrast_slider = ctk.CTkSlider(contrast_row, from_=-100, to=100, number_of_steps=200, command=self._on_contrast_change)
+        contrast_slider.set(self.contrast_value)
+        contrast_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        undo_contrast_btn = ctk.CTkButton(contrast_row, text="🔄 取消", command=lambda: contrast_slider.set(0))
+        undo_contrast_btn.pack(side="left")
+        # 彩度
+        saturation_row = ctk.CTkFrame(frame)
+        saturation_row.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(saturation_row, text="彩度").pack(side="left", padx=(0, 5))
+        saturation_slider = ctk.CTkSlider(saturation_row, from_=-100, to=100, number_of_steps=200, command=self._on_saturation_change)
+        saturation_slider.set(self.saturation_value)
+        saturation_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        undo_saturation_btn = ctk.CTkButton(saturation_row, text="🔄 取消", command=lambda: saturation_slider.set(0))
+        undo_saturation_btn.pack(side="left")
     """基本調整プラグイン"""
     
     def __init__(self):
@@ -33,47 +65,37 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         return "明度、コントラスト、彩度の基本的な画像調整を提供します"
     
     def create_ui(self, parent: ctk.CTkFrame) -> None:
-        """基本調整UIを作成"""
-        
-        # 明度調整
-        self._sliders['brightness'], self._labels['brightness'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="明度",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_brightness_change,
-            value_format="{:.0f}"
-        )
-        
-        # コントラスト調整
-        self._sliders['contrast'], self._labels['contrast'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="コントラスト",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_contrast_change,
-            value_format="{:.0f}"
-        )
-        
-        # 彩度調整
-        self._sliders['saturation'], self._labels['saturation'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="彩度",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_saturation_change,
-            value_format="{:.0f}"
-        )
-        
-        # リセットボタン
-        self._buttons['reset'] = PluginUIHelper.create_button(
-            parent=parent,
-            text="リセット",
-            command=self.reset_parameters
-        )
+        """基本調整タブのUI生成（明るさ・コントラスト・彩度）"""
+        frame = ctk.CTkFrame(parent)
+        frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(frame, text="基本調整", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        # 明るさ
+        brightness_row = ctk.CTkFrame(frame)
+        brightness_row.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(brightness_row, text="明るさ").pack(side="left", padx=(0, 5))
+        brightness_slider = ctk.CTkSlider(brightness_row, from_=-100, to=100, number_of_steps=200, command=self._on_brightness_change)
+        brightness_slider.set(self.brightness_value)
+        brightness_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        undo_brightness_btn = ctk.CTkButton(brightness_row, text="🔄 取消", command=lambda: brightness_slider.set(0))
+        undo_brightness_btn.pack(side="left")
+        # コントラスト
+        contrast_row = ctk.CTkFrame(frame)
+        contrast_row.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(contrast_row, text="コントラスト").pack(side="left", padx=(0, 5))
+        contrast_slider = ctk.CTkSlider(contrast_row, from_=-100, to=100, number_of_steps=200, command=self._on_contrast_change)
+        contrast_slider.set(self.contrast_value)
+        contrast_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        undo_contrast_btn = ctk.CTkButton(contrast_row, text="🔄 取消", command=lambda: contrast_slider.set(0))
+        undo_contrast_btn.pack(side="left")
+        # 彩度
+        saturation_row = ctk.CTkFrame(frame)
+        saturation_row.pack(fill="x", padx=5, pady=2)
+        ctk.CTkLabel(saturation_row, text="彩度").pack(side="left", padx=(0, 5))
+        saturation_slider = ctk.CTkSlider(saturation_row, from_=-100, to=100, number_of_steps=200, command=self._on_saturation_change)
+        saturation_slider.set(self.saturation_value)
+        saturation_slider.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        undo_saturation_btn = ctk.CTkButton(saturation_row, text="🔄 取消", command=lambda: saturation_slider.set(0))
+        undo_saturation_btn.pack(side="left")
     
     def _on_brightness_change(self, value: float) -> None:
         """明度値変更時の処理"""

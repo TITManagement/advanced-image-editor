@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Advanced Image Editor - Plugin System Version
 プラグインシステム対応版画像編集アプリケーション
@@ -24,6 +23,11 @@ cd <本リポジトリのクローン先ディレクトリ>
 【バージョン】Plugin System 1.0.0
 【最終更新】2025年9月15日
 """
+import sys
+sys.path.append('/Users/tinoue/Development.local/lib-image_toolkit')
+#!/usr/bin/env python3
+import sys
+sys.path.append('/Users/tinoue/Development.local/lib-image_toolkit')
 
 try:
     import tkinter as tk
@@ -82,6 +86,7 @@ try:
     from plugins.density import DensityAdjustmentPlugin
     from plugins.filters import FilterProcessingPlugin
     from plugins.analysis import ImageAnalysisPlugin
+    from plugins.analysis.histogram_analysis_plugin import HistogramAnalysisPlugin
     print("✅ プラグインシステムのインポートが完了しました")
 except ImportError as e:
     print(f"❌ プラグインシステムインポートエラー: {e}")
@@ -154,23 +159,35 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
         self.ui.setup_control_buttons(callbacks)
     
     def setup_plugin_tabs(self):
-        """プラグイン用のタブビューをセットアップ"""
-        # タブ定義
+        """プラグイン用のタブビューをセットアップ（各タブにUI部品を生成）"""
         plugin_tabs = {
             "basic_adjustment": "🎯 基本調整",
             "density_adjustment": "🌈 濃度調整", 
             "filter_processing": "🌀 フィルター",
             "image_analysis": "🔬 画像解析"
         }
-        
-        # UIクラスでタブを作成
         self.plugin_frames = self.ui.setup_plugin_tabs(plugin_tabs)
+
+        # 各プラグインのUI部品生成（analysis_plugin.py方式）
+        # プラグインインスタンスはsetup_pluginsで生成済みと仮定
+        # self.plugin_instancesはsetup_pluginsで作成する
+        if hasattr(self, 'plugin_instances'):
+            # 基本調整
+            if 'basic_adjustment' in self.plugin_instances:
+                self.plugin_instances['basic_adjustment'].create_ui(self.plugin_frames['basic_adjustment'])
+            # 濃度調整
+            if 'density_adjustment' in self.plugin_instances:
+                print('[LOG] 濃度調整タブのUI部品表示トリガ: create_ui を呼び出します')
+                self.plugin_instances['density_adjustment'].create_ui(self.plugin_frames['density_adjustment'])
+            # フィルター
+            if 'filter_processing' in self.plugin_instances:
+                self.plugin_instances['filter_processing'].create_ui(self.plugin_frames['filter_processing'])
+            # 画像解析（ここではUI生成しない）
     
+
     def setup_plugins(self):
-        """プラグインを登録・初期化"""
+        """プラグインを登録・初期化（UI生成→コールバック登録・検証の順に分離）"""
         info_print("プラグインを登録中...")
-        
-        # プラグイン設定定義（メンテナンス性向上）
         plugin_configs = [
             {
                 'name': 'basic_adjustment',
@@ -180,7 +197,7 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 }
             },
             {
-                'name': 'density_adjustment', 
+                'name': 'density_adjustment',
                 'class': DensityAdjustmentPlugin,
                 'callbacks': {
                     'parameter_change': self.on_plugin_parameter_change,
@@ -202,6 +219,11 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 }
             },
             {
+                'name': 'histogram_analysis',
+                'class': HistogramAnalysisPlugin,
+                'callbacks': {}
+            },
+            {
                 'name': 'image_analysis',
                 'class': ImageAnalysisPlugin,
                 'callbacks': {
@@ -218,37 +240,98 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 }
             }
         ]
-        
-        # プラグインを一括登録
-        self._register_plugins_from_config(plugin_configs)
-        
+
+        # プラグインインスタンス生成・UI生成
+        plugin_instances = {}
+        histogram_plugin_instance = None
+        for config in plugin_configs:
+            plugin_name = config['name']
+            plugin_class = config['class']
+            try:
+                plugin_instance = plugin_class()
+                plugin_instances[plugin_name] = plugin_instance
+                self.plugin_manager.register_plugin(plugin_instance)
+                debug_print(f"   ✅ {plugin_name} プラグインインスタンス生成・登録完了")
+                if plugin_name == 'histogram_analysis':
+                    histogram_plugin_instance = plugin_instance
+                # 濃度調整プラグインには画像表示コールバックを設定
+                if plugin_name == 'density_adjustment' and hasattr(self.image_editor, 'update_current_image'):
+                    if hasattr(plugin_instance, 'set_update_image_callback'):
+                        plugin_instance.set_update_image_callback(self.image_editor.update_current_image)
+                        debug_print("   ✓ density_adjustment: update_image_callback 設定完了")
+            except Exception as e:
+                error_print(f"{plugin_name} プラグインインスタンス生成失敗: {e}")
+                continue
+
+        # UI生成（create_plugin_tabsで各フレームにUI生成済み）
+        # コールバック登録・検証
+        for config in plugin_configs:
+            plugin_name = config['name']
+            plugin_instance = plugin_instances.get(plugin_name)
+            callbacks = config.get('callbacks', {})
+            if not plugin_instance:
+                continue
+            try:
+                self._setup_plugin_callbacks(plugin_instance, callbacks, plugin_name)
+            except Exception as e:
+                error_print(f"{plugin_name} コールバック登録失敗: {e}")
+                continue
+
+        # ImageAnalysisPluginにHistogramAnalysisPluginのshow_histogramを必ずコールバック登録
+        image_analysis_plugin = plugin_instances.get('image_analysis')
+        if image_analysis_plugin and histogram_plugin_instance:
+            if hasattr(image_analysis_plugin, 'set_rgb_histogram_callback'):
+                image_analysis_plugin.set_rgb_histogram_callback(histogram_plugin_instance.show_histogram)
+                debug_print(f"[KISS] set_rgb_histogram_callback: {image_analysis_plugin.rgb_histogram_callback}")
+                if image_analysis_plugin.rgb_histogram_callback is None:
+                    error_print("[ERROR] set_rgb_histogram_callbackにNoneが渡されました。コールバック設定を確認してください。")
+
+        # ImageAnalysisPluginに画像表示コールバックを登録
+        image_analysis_plugin = plugin_instances.get('image_analysis')
+        if image_analysis_plugin:
+            if hasattr(self, 'image_editor'):
+                image_analysis_plugin.set_display_image_callback(self.image_editor.update_current_image)
+
         info_print(f"{len(self.plugin_manager.plugins)}個のプラグインが登録されました")
-    
+        print("[DEBUG] plugin_manager.plugins:", self.plugin_manager.plugins)
+        # ここでインスタンスを保存
+        self.plugin_instances = plugin_instances
+        
     def _register_plugins_from_config(self, plugin_configs):
         """プラグイン設定から一括登録（メンテナンス性向上）"""
         successful_plugins = 0
         failed_plugins = []
         
+        histogram_plugin_instance = None
         for config in plugin_configs:
             try:
                 plugin_name = config['name']
                 plugin_class = config['class']
                 callbacks = config.get('callbacks', {})
-                
+
                 debug_print(f"   🔌 {plugin_name} プラグインを初期化中...")
-                
+
                 # プラグインインスタンス作成
                 plugin_instance = plugin_class()
-                
+
+                # HistogramAnalysisPluginのインスタンスを保存
+                if plugin_name == 'histogram_analysis':
+                    histogram_plugin_instance = plugin_instance
+
                 # コールバック設定
                 self._setup_plugin_callbacks(plugin_instance, callbacks, plugin_name)
-                
+
+                # ImageAnalysisPluginにHistogramAnalysisPluginのshow_histogramを渡す
+                if plugin_name == 'image_analysis' and histogram_plugin_instance:
+                    if hasattr(plugin_instance, 'set_rgb_histogram_callback'):
+                        plugin_instance.set_rgb_histogram_callback(histogram_plugin_instance.show_histogram)
+
                 # プラグインマネージャーに登録
                 self.plugin_manager.register_plugin(plugin_instance)
-                
+
                 successful_plugins += 1
                 debug_print(f"   ✅ {plugin_name} プラグイン登録完了")
-                
+
             except Exception as e:
                 failed_plugins.append({'name': plugin_name, 'error': str(e)})
                 error_print(f"{plugin_name} プラグイン登録失敗: {e}")
@@ -260,15 +343,15 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             warning_print(f"{len(failed_plugins)}個のプラグインで問題が発生しましたが、アプリは継続実行されます")
             for failed in failed_plugins:
                 warning_print(f"- {failed['name']}: {failed['error']}")
-        
         debug_print(f"プラグイン登録結果: 成功={successful_plugins}, 失敗={len(failed_plugins)}")
+        print("[DEBUG] plugin_manager.plugins.keys():", self.plugin_manager.plugins.keys())
     
     def _setup_plugin_callbacks(self, plugin_instance, callbacks, plugin_name):
         """プラグインのコールバック設定（設定漏れ防止）"""
         # コールバック設定のマッピング
         callback_methods = {
             'parameter_change': 'set_parameter_change_callback',
-            'histogram': 'set_histogram_callback', 
+            'histogram': 'set_histogram_callback',
             'threshold': 'set_threshold_callback',
             'special_filter': 'set_special_filter_callback',
             'morphology': 'set_morphology_callback',
@@ -286,6 +369,18 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
             'undo_noise': 'set_undo_noise_callback',
             'undo_histogram': 'set_undo_histogram_callback',
         }
+
+        # histogram_analysisプラグインには画像取得コールバックを必ず渡す
+        if plugin_name == 'histogram_analysis' and hasattr(plugin_instance, 'set_histogram_callback'):
+            def get_current_image():
+                # ImageEditorから現在の画像を取得
+                if hasattr(self, 'image_editor'):
+                    img = self.image_editor.get_current_image()
+                    print(f"[DEBUG] get_current_image called, img={img}")
+                    return img
+                print("[DEBUG] get_current_image: image_editor not found")
+                return None
+            plugin_instance.set_histogram_callback(get_current_image)
         
         # 各コールバックを設定
         for callback_key, callback_function in callbacks.items():
@@ -335,11 +430,35 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
     
     def create_plugin_tabs(self):
         """プラグイン用のタブとUIを作成"""
+        # 画像解析タブのフレームにサブプラグインUIを必ず生成
+        image_analysis_frame = self.plugin_frames.get("image_analysis")
+        histogram_plugin = self.plugin_manager.get_plugin("histogram_analysis")
+        image_analysis_plugin = self.plugin_manager.get_plugin("image_analysis")
+        if image_analysis_frame:
+            # HistogramAnalysisPluginのUI生成は不要。ImageAnalysisPlugin側で集中管理。
+            if image_analysis_plugin:
+                try:
+                    print(f"[DEBUG] image_analysis_plugin.setup_ui呼び出し: {image_analysis_plugin}, frame={image_analysis_frame}")
+                    image_analysis_plugin.setup_ui(image_analysis_frame)
+                except Exception as e:
+                    print(f"[ERROR] 画像解析プラグインのUI生成で例外: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+        # 他のタブは従来通り
         for plugin_name, frame in self.plugin_frames.items():
+            if plugin_name == "image_analysis":
+                continue
             plugin = self.plugin_manager.get_plugin(plugin_name)
+            print(f"[DEBUG] create_plugin_tabs: plugin_name={plugin_name}, plugin={plugin}, frame={frame}")
             if plugin:
-                # プラグインUIを作成
-                plugin.create_ui(frame)
+                try:
+                    print(f"[DEBUG] {plugin_name} setup_ui呼び出し: {plugin}, frame={frame}")
+                    plugin.setup_ui(frame)
+                except Exception as e:
+                    print(f"[ERROR] プラグイン '{plugin_name}' のUI生成で例外: {e}")
+                    import traceback
+                    traceback.print_exc()
     
     def on_plugin_parameter_change(self):
         """プラグインパラメータ変更時の処理"""
@@ -350,6 +469,14 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
         """画像読み込み完了時の処理"""
         info_print("新しい画像読み込み: 全プラグインを初期化中...")
         self.reset_all_plugins()
+        # 画像解析プラグインに画像をセット
+        image_analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+        density_plugin = self.plugin_manager.get_plugin('density_adjustment')
+        current_image = self.image_editor.get_current_image()
+        if image_analysis_plugin and current_image:
+            image_analysis_plugin.set_image(current_image)
+        if density_plugin and current_image:
+            density_plugin.set_image(current_image)
         debug_print("全プラグイン初期化完了")
     
     def apply_all_adjustments(self):
@@ -367,6 +494,11 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 error_print("元画像が取得できません")
                 return
             debug_print(f"元画像サイズ: {adjusted_image.size}")
+            
+            # 画像解析プラグインに画像をセット
+            image_analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if image_analysis_plugin:
+                image_analysis_plugin.set_image(adjusted_image)
             
             # 有効な全プラグインで順次処理
             enabled_plugins = self.plugin_manager.get_enabled_plugins()
@@ -515,14 +647,17 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
     
     def apply_binary_threshold(self):
         """2値化を適用"""
+        print("[DEBUG] plugin_manager.plugins.keys():", self.plugin_manager.plugins.keys())
+        density_plugin = self.plugin_manager.get_plugin('density_adjustment')
+        print("[DEBUG] density_plugin:", density_plugin)
+        print("[DEBUG] hasattr(apply_binary_threshold):", hasattr(density_plugin, 'apply_binary_threshold'))
+        print("[DEBUG] type(density_plugin):", type(density_plugin))
         try:
             current_image = self.image_editor.get_current_image()
             if not current_image:
                 self.image_editor.status_label.configure(text="❌ 画像が読み込まれていません")
                 return
-            
             # 濃度調整プラグインから2値化を実行
-            density_plugin = self.plugin_manager.get_plugin('density_adjustment')
             if density_plugin and hasattr(density_plugin, 'apply_binary_threshold'):
                 apply_method = getattr(density_plugin, 'apply_binary_threshold')
                 processed_image = apply_method(current_image)
@@ -531,7 +666,6 @@ class AdvancedImageEditorPluginVersion(ctk.CTk):
                 self.image_editor.status_label.configure(text="📐 2値化を適用しました")
             else:
                 self.image_editor.status_label.configure(text="❌ 濃度調整プラグインが見つかりません")
-                
         except Exception as e:
             debug_print(f"❌ 2値化エラー: {e}")
             MessageDialog.show_error(self, "エラー", f"2値化エラー: {e}")

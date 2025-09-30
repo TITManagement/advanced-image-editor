@@ -28,465 +28,339 @@ except ImportError as e:
 
 
 class DensityAdjustmentPlugin(ImageProcessorPlugin):
+    def set_update_image_callback(self, callback):
+        """画像表示コールバックをセット"""
+        self.update_image_callback = callback
+
+    def on_histogram_equalization(self):
+        """ヒストグラム均等化ボタンのイベントハンドラ"""
+        if hasattr(self, 'histogram_callback') and callable(self.histogram_callback):
+            self.histogram_callback()
+        else:
+            print("[DEBUG] histogram_callback 未設定: ヒストグラム均等化は実行されません")
+    def set_image(self, image: Image.Image):
+        """外部から画像をセットするためのメソッド"""
+        self.image = image
+        print(f"[DEBUG] set_image: self.image={{type(self.image)}}")
+        self._on_parameter_change()  # 画像セット時に即座にUI反映
+
+    def on_curve_change(self, curve_data):
+        """ガンマカーブ変更時のコールバック"""
+        print(f"[DEBUG] on_curve_change: curve_data={curve_data[:5]} ... {curve_data[-5:]}")
+        self.gamma_lut = curve_data  # LUTを保存
+        self._on_parameter_change()
+    def setup_main_ui(self, parent):
+        """濃度調整タブのUI部品生成（main_plugin.pyから呼び出される）"""
+        self.create_ui(parent)
+    def create_ui(self, parent):
+        print("[DEBUG] DensityAdjustmentPlugin.create_ui called", parent, type(parent))
+        try:
+            print(f"[DEBUG] parent.winfo_children(before): {parent.winfo_children()}")
+            print(f"[DEBUG] parent.winfo_geometry(before): {parent.winfo_geometry()}")
+        except Exception as e:
+            print(f"[DEBUG] parent info error (before): {e}")
+        """濃度調整タブのUI部品生成（analysis_plugin.pyの方針に準拠）"""
+        if not hasattr(self, '_sliders'):
+            self._sliders = {}
+        if not hasattr(self, '_labels'):
+            self._labels = {}
+        if not hasattr(self, '_buttons'):
+            self._buttons = {}
+
+        # --- カーブエディタ（常時表示） ---
+        if CURVE_EDITOR_AVAILABLE:
+            self.gamma_curve_frame = ctk.CTkFrame(parent)
+            self.gamma_curve_frame.pack(side="top", fill="x", padx=5, pady=2)
+            ctk.CTkLabel(self.gamma_curve_frame, text="ガンマカーブ", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(2, 0))
+            self.curve_editor = CurveEditor(self.gamma_curve_frame)
+            self.curve_editor.pack(fill="x", padx=5, pady=2)
+            self.curve_editor.on_curve_change = self.on_curve_change
+
+        # --- ガンマスライダーUI削除（カーブエディタのみ表示） ---
+
+        # --- シャドウ調整（1行表示） ---
+        row_shadow = ctk.CTkFrame(parent)
+        row_shadow.pack(side="top", fill="x", padx=5, pady=2)
+        label_shadow = ctk.CTkLabel(row_shadow, text="シャドウ", font=("Arial", 11))
+        label_shadow.pack(side="left", padx=3)
+        self._sliders['shadow'], self._labels['shadow'] = PluginUIHelper.create_slider_with_label(
+            parent=row_shadow,
+            text=None,
+            from_=-100,
+            to=100,
+            default_value=0,
+            command=self.on_shadow_change,
+            value_format="{:.0f}"
+        )
+        self._labels['shadow'].pack(side="left", padx=6)
+
+        # --- ハイライト調整（1行表示） ---
+        row_highlight = ctk.CTkFrame(parent)
+        row_highlight.pack(side="top", fill="x", padx=5, pady=2)
+        label_highlight = ctk.CTkLabel(row_highlight, text="ハイライト", font=("Arial", 11))
+        label_highlight.pack(side="left", padx=3)
+        self._sliders['highlight'], self._labels['highlight'] = PluginUIHelper.create_slider_with_label(
+            parent=row_highlight,
+            text=None,
+            from_=-100,
+            to=100,
+            default_value=0,
+            command=self.on_highlight_change,
+            value_format="{:.0f}"
+        )
+        self._labels['highlight'].pack(side="left", padx=6)
+
+        # --- 色温度調整（1行表示） ---
+        row_temp = ctk.CTkFrame(parent)
+        row_temp.pack(side="top", fill="x", padx=5, pady=2)
+        label_temp = ctk.CTkLabel(row_temp, text="色温度", font=("Arial", 11))
+        label_temp.pack(side="left", padx=3)
+        self._sliders['temperature'], self._labels['temperature'] = PluginUIHelper.create_slider_with_label(
+            parent=row_temp,
+            text=None,
+            from_=-100,
+            to=100,
+            default_value=0,
+            command=self.on_temperature_change,
+            value_format="{:.0f}"
+        )
+        self._labels['temperature'].pack(side="left", padx=6)
+
+        # --- 2値化セクション（1行表示） ---
+        row_threshold = ctk.CTkFrame(parent)
+        row_threshold.pack(side="top", fill="x", padx=5, pady=2)
+        label_threshold = ctk.CTkLabel(row_threshold, text="閾値", font=("Arial", 11))
+        label_threshold.pack(side="left", padx=3)
+        self._sliders['threshold'], self._labels['threshold'] = PluginUIHelper.create_slider_with_label(
+            parent=row_threshold,
+            text=None,
+            from_=0,
+            to=255,
+            default_value=127,
+            command=self.on_threshold_change,
+            value_format="{:.0f}"
+        )
+        self._labels['threshold'].pack(side="left", padx=6)
+        self._buttons['binary'] = PluginUIHelper.create_button(
+            row_threshold,
+            text="2値化実行",
+            command=lambda: (self.binary_threshold_callback() if hasattr(self, 'binary_threshold_callback') and callable(self.binary_threshold_callback) else self.on_apply_binary_threshold()) if self.image is not None else None
+        )
+
+        # --- ヒストグラム均等化 ---
+        ctk.CTkLabel(parent, text="ヒストグラム均等化", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
+        row_hist = ctk.CTkFrame(parent)
+        row_hist.pack(side="top", fill="x", padx=5, pady=2)
+        self._buttons['histogram'] = PluginUIHelper.create_button(
+            row_hist,
+            text="ヒストグラム均等化",
+            command=lambda: self.on_histogram_equalization() if self.image is not None else None
+        )
+
+        # --- リセットボタン ---
+        row_reset = ctk.CTkFrame(parent)
+        row_reset.pack(side="top", fill="x", padx=5, pady=2)
+        self._buttons['reset'] = PluginUIHelper.create_button(
+            row_reset,
+            text="リセット",
+            command=self.reset_parameters
+        )
+
+        # --- （下方のカーブエディタ生成・配置は削除） ---
+
+    # 初期表示（カーブエディタのみ表示）
+        try:
+            print(f"[DEBUG] parent.winfo_children(after): {parent.winfo_children()}")
+            print(f"[DEBUG] parent.winfo_geometry(after): {parent.winfo_geometry()}")
+        except Exception as e:
+            print(f"[DEBUG] parent info error (after): {e}")
+
+    def _on_parameter_change(self):
+        print("[DEBUG] 濃度調整 _on_parameter_change 発動")
+        # 画像処理APIを呼び出し、結果を表示
+        if self.image is not None:
+            processed = self.process_image(self.image)
+            if hasattr(self, 'update_image_callback') and callable(self.update_image_callback):
+                self.update_image_callback(processed)
+            else:
+                print("[DEBUG] update_image_callback 未設定: 画像表示は更新されません")
+
     """濃度調整プラグイン"""
-    
     def __init__(self):
         super().__init__("density_adjustment", "1.0.0")
+        self.image = None
         self.gamma_value = 1.0
         self.shadow_value = 0
         self.highlight_value = 0
         self.temperature_value = 0
         self.threshold_value = 127
-        
+
         # カーブエディタ用の変数
         self.use_curve_gamma = False  # カーブベースガンマ補正を使用するかどうか
         self.gamma_lut = None  # ガンマ補正用LUT
-        
+
         # 個別機能の状態追跡
         self.applied_binary = False
+        self.gamma_slider_frame = None
+        self.gamma_curve_frame = None
+        self.histogram_callback = None
         self.applied_histogram = False
         
+    def process_image(self, image):
+        """カーブエディタのLUTでガンマ補正＋シャドウ・ハイライト調整"""
+        import numpy as np
+        from PIL import Image
+        print(f"[DEBUG] process_image: shadow={self.shadow_value}, highlight={self.highlight_value}")
+        img_array = np.array(image)
+        # --- ガンマカーブ補正 ---
+        if hasattr(self, 'gamma_lut') and self.gamma_lut is not None:
+            lut = self.gamma_lut
+        else:
+            lut = np.arange(256, dtype=np.uint8)
+        print(f"[DEBUG] gamma_lut: {lut[:5]} ... {lut[-5:]}")
+        for c in range(img_array.shape[2]):
+            img_array[..., c] = lut[img_array[..., c]]
+        # --- シャドウ・ハイライト調整 ---
+        img_array = self.apply_shadow_highlight(img_array, self.shadow_value, self.highlight_value)
+        result_image = Image.fromarray(img_array)
+        return result_image
+
+    def apply_shadow_highlight(self, img_array, shadow_value, highlight_value):
+        import numpy as np
+        print(f"[DEBUG] apply_shadow_highlight: shadow_value={shadow_value}, highlight_value={highlight_value}")
+        luminance = img_array.mean(axis=2)
+        shadow_mask = (luminance < 128)[:, :, np.newaxis]
+        highlight_mask = (luminance >= 128)[:, :, np.newaxis]
+        img_array = img_array.astype(np.int16)
+        img_array_shadow = np.where(shadow_mask, np.clip(img_array + shadow_value, 0, 255), img_array)
+        img_array_result = np.where(highlight_mask, np.clip(img_array_shadow + highlight_value, 0, 255), img_array_shadow)
+        return img_array_result.astype(np.uint8)
+
+    def set_histogram_callback(self, callback):
+        """ヒストグラム均等化用コールバック登録"""
+        self.histogram_callback = callback
+
+    def set_threshold_callback(self, callback):
+        """2値化用コールバック登録"""
+        self.binary_threshold_callback = callback
     def get_display_name(self) -> str:
         return "濃度調整"
     
     def get_description(self) -> str:
         return "ガンマ補正、シャドウ/ハイライト調整、色温度調整を提供します"
     
-    def create_ui(self, parent: ctk.CTkFrame) -> None:
-        """濃度調整UIを作成"""
-        
-        # ガンマ補正方式選択
-        self.gamma_mode_frame = ctk.CTkFrame(parent)
-        self.gamma_mode_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(self.gamma_mode_frame, text="ガンマ補正方式").pack(pady=(5, 0))
-        
-        self.gamma_mode_var = ctk.StringVar(value="slider")
-        self.gamma_mode_radio1 = ctk.CTkRadioButton(
-            self.gamma_mode_frame, 
-            text="スライダー", 
-            variable=self.gamma_mode_var, 
-            value="slider",
-            command=self._on_gamma_mode_change
-        )
-        self.gamma_mode_radio1.pack(side="left", padx=10, pady=5)
-        
-        if CURVE_EDITOR_AVAILABLE:
-            self.gamma_mode_radio2 = ctk.CTkRadioButton(
-                self.gamma_mode_frame, 
-                text="カーブ", 
-                variable=self.gamma_mode_var, 
-                value="curve",
-                command=self._on_gamma_mode_change
-            )
-            self.gamma_mode_radio2.pack(side="left", padx=10, pady=5)
-        
-        # ガンマ補正コントロール用フレーム
-        self.gamma_control_frame = ctk.CTkFrame(parent)
-        self.gamma_control_frame.pack(fill="x", padx=5, pady=5)
-        
-        # ガンマ補正スライダー（デフォルト）
-        self.gamma_slider_frame = ctk.CTkFrame(self.gamma_control_frame)
-        self.gamma_slider_frame.pack(fill="x", padx=5, pady=5)
-        
-        self._sliders['gamma'], self._labels['gamma'] = PluginUIHelper.create_slider_with_label(
-            parent=self.gamma_slider_frame,
-            text="ガンマ補正",
-            from_=0.1,
-            to=3.0,
-            default_value=1.0,
-            command=self._on_gamma_change,
-            value_format="{:.2f}"
-        )
-        
-        # カーブエディタフレーム（初期は非表示）
-        if CURVE_EDITOR_AVAILABLE:
-            self.gamma_curve_frame = ctk.CTkFrame(self.gamma_control_frame)
-            self.curve_editor = CurveEditor(
-                self.gamma_curve_frame, 
-                width=250, 
-                height=250,
-                on_curve_change=self._on_curve_change
-            )
-            self.curve_editor.pack(padx=5, pady=5)
-        
-        # シャドウ調整
-        self._sliders['shadow'], self._labels['shadow'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="シャドウ",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_shadow_change,
-            value_format="{:.0f}"
-        )
-        
-        # ハイライト調整
-        self._sliders['highlight'], self._labels['highlight'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="ハイライト",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_highlight_change,
-            value_format="{:.0f}"
-        )
-        
-        # 色温度調整
-        self._sliders['temperature'], self._labels['temperature'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="色温度",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_temperature_change,
-            value_format="{:.0f}"
-        )
-        
-        # 2値化セクション
-        threshold_frame = ctk.CTkFrame(parent)
-        threshold_frame.pack(fill="x", padx=5, pady=5)
-        
-        ctk.CTkLabel(threshold_frame, text="2値化", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
-        
-        # 閾値スライダー
-        self._sliders['threshold'], self._labels['threshold'] = PluginUIHelper.create_slider_with_label(
-            parent=threshold_frame,
-            text="閾値",
-            from_=0,
-            to=255,
-            default_value=127,
-            command=self._on_threshold_change,
-            value_format="{:.0f}"
-        )
-        
-        # 2値化実行ボタン
-        self._buttons['binary'] = PluginUIHelper.create_button(
-            threshold_frame,
-            text="2値化実行",
-            command=self._apply_binary_threshold
-        )
-        
-        # ヒストグラム均等化ボタン
-        self._buttons['histogram'] = PluginUIHelper.create_button(
-            parent=parent,
-            text="ヒストグラム均等化",
-            command=self._on_histogram_equalization
-        )
-        
-        # リセットボタン
-        self._buttons['reset'] = PluginUIHelper.create_button(
-            parent=parent,
-            text="リセット",
-            command=self.reset_parameters
-        )
-    
-    def _on_gamma_change(self, value: float) -> None:
-        """ガンマ値変更時の処理"""
-        self.gamma_value = float(value)
-        print(f"🔍 ガンマ値更新: {self.gamma_value:.2f}")
-        self._on_parameter_change()
-    
-    def _on_gamma_mode_change(self) -> None:
-        """ガンマ補正方式変更時の処理"""
-        mode = self.gamma_mode_var.get()
-        print(f"🔄 ガンマ補正方式変更: {mode}")
-        
-        if mode == "slider":
-            # スライダーモードに切り替え
-            self.use_curve_gamma = False
-            self.gamma_lut = None
-            self.gamma_slider_frame.pack(fill="x", padx=5, pady=5)
-            if CURVE_EDITOR_AVAILABLE and hasattr(self, 'gamma_curve_frame'):
-                self.gamma_curve_frame.pack_forget()
-        elif mode == "curve" and CURVE_EDITOR_AVAILABLE:
-            # カーブモードに切り替え
-            self.use_curve_gamma = True
-            self.gamma_slider_frame.pack_forget()
-            if hasattr(self, 'gamma_curve_frame'):
-                self.gamma_curve_frame.pack(fill="x", padx=5, pady=5)
-        
-        self._on_parameter_change()
-    
-    def _on_curve_change(self, lut: np.ndarray) -> None:
-        """カーブ変更時の処理"""
-        self.gamma_lut = lut
-        print(f"📈 カーブ更新: LUT設定完了")
-        self._on_parameter_change()
-    
-    def _on_shadow_change(self, value: float) -> None:
-        """シャドウ値変更時の処理"""
-        self.shadow_value = int(value)
-        print(f"🌑 シャドウ値更新: {self.shadow_value}")
-        self._on_parameter_change()
-    
-    def _on_highlight_change(self, value: float) -> None:
-        """ハイライト値変更時の処理"""
-        self.highlight_value = int(value)
-        print(f"💡 ハイライト値更新: {self.highlight_value}")
-        self._on_parameter_change()
-    
-    def _on_temperature_change(self, value: float) -> None:
-        """色温度値変更時の処理"""
-        self.temperature_value = int(value)
-        print(f"🌡️ 色温度値更新: {self.temperature_value}")
-        self._on_parameter_change()
-    
-    def _on_threshold_change(self, value: float) -> None:
-        """閾値変更時の処理"""
-        self.threshold_value = int(value)
-        print(f"📐 閾値更新: {self.threshold_value}")
-    
-    def _on_curve_change(self, lut: np.ndarray) -> None:
-        """カーブ変更時の処理"""
-        if self.use_curve_gamma:
-            self.gamma_lut = lut.copy()
-            print(f"📊 ガンマカーブ更新: LUT[0]={lut[0]}, LUT[128]={lut[128]}, LUT[255]={lut[255]}")
-            self._on_parameter_change()
-    
-    def _on_shadow_change(self, value: float) -> None:
-        """シャドウ値変更時の処理"""
-        self.shadow_value = int(value)
-        if hasattr(self, '_labels') and 'shadow' in self._labels:
-            self._labels['shadow'].configure(text=f"{self.shadow_value}")
-        print(f"🌑 シャドウ値更新: {self.shadow_value}")
-        self._on_parameter_change()
-    
-    def _on_highlight_change(self, value: float) -> None:
-        """ハイライト値変更時の処理"""
-        self.highlight_value = int(value)
-        if hasattr(self, '_labels') and 'highlight' in self._labels:
-            self._labels['highlight'].configure(text=f"{self.highlight_value}")
-        print(f"💡 ハイライト値更新: {self.highlight_value}")
-        self._on_parameter_change()
-    
-    def _on_temperature_change(self, value: float) -> None:
-        """色温度値変更時の処理"""
-        self.temperature_value = int(value)
-        if hasattr(self, '_labels') and 'temperature' in self._labels:
-            self._labels['temperature'].configure(text=f"{self.temperature_value}")
-        print(f"🌡️ 色温度値更新: {self.temperature_value}")
-        self._on_parameter_change()
-    
-    def _on_threshold_change(self, value: float) -> None:
-        """閾値変更時の処理"""
-        self.threshold_value = int(value)
-        if hasattr(self, '_labels') and 'threshold' in self._labels:
-            self._labels['threshold'].configure(text=f"{self.threshold_value}")
-        print(f"📐 閾値更新: {self.threshold_value}")
-    
-    def _apply_binary_threshold(self) -> None:
-        """2値化実行"""
-        self.applied_binary = True
-        print(f"📐 2値化実行: 閾値={self.threshold_value}")
-        if hasattr(self, 'threshold_callback'):
-            self.threshold_callback()
-    
-    def _on_histogram_equalization(self) -> None:
-        """ヒストグラム均等化実行"""
-        self.applied_histogram = True
-        print(f"📊 ヒストグラム均等化実行")
-        # このボタンは特別な処理として扱い、パラメータ変更コールバックを呼び出す
-        if hasattr(self, 'histogram_callback'):
-            self.histogram_callback()
-    
-    def set_histogram_callback(self, callback):
-        """ヒストグラム均等化用の特別なコールバックを設定"""
-        self.histogram_callback = callback
-    
-    def set_threshold_callback(self, callback):
-        """2値化用のコールバックを設定"""
-        self.threshold_callback = callback
-    
-    def process_image(self, image: Image.Image, **params) -> Image.Image:
-        """濃度調整を適用"""
-        try:
-            if not image:
-                return image
-            
-            print(f"🔄 濃度調整開始...")
-            result_image = image.copy()
-            
-            # NumPy配列に変換
-            img_array = np.array(result_image, dtype=np.float32)
-            
-            # ガンマ補正
-            if self.use_curve_gamma and self.gamma_lut is not None:
-                print(f"🎯 カーブベースガンマ補正適用")
-                # カーブベースのガンマ補正
-                img_array_int = img_array.astype(np.uint8)
-                img_array = self.gamma_lut[img_array_int].astype(np.float32)
-            elif self.gamma_value != 1.0:
-                print(f"🎯 スライダーベースガンマ補正適用: {self.gamma_value}")
-                # 従来のスライダーベースガンマ補正
-                img_array = img_array / 255.0
-                img_array = np.power(img_array, 1.0 / self.gamma_value)
-                img_array = img_array * 255.0
-            
-            # シャドウ/ハイライト調整
-            if self.shadow_value != 0 or self.highlight_value != 0:
-                print(f"🌗 シャドウ/ハイライト調整: シャドウ={self.shadow_value}, ハイライト={self.highlight_value}")
-                img_array = self._apply_shadow_highlight(img_array)
-            
-            # 色温度調整
-            if self.temperature_value != 0:
-                print(f"🌡️ 色温度調整: {self.temperature_value}")
-                img_array = self._apply_temperature(img_array)
-            
-            # 0-255の範囲にクリップ
-            img_array = np.clip(img_array, 0, 255).astype(np.uint8)
-            result_image = Image.fromarray(img_array)
-            
-            print(f"✅ 濃度調整完了")
-            return result_image
-            
-        except Exception as e:
-            print(f"❌ 濃度調整エラー: {e}")
-            return image
-    
-    def _apply_shadow_highlight(self, img_array: np.ndarray) -> np.ndarray:
-        """シャドウ/ハイライト調整を適用"""
-        img_normalized = img_array / 255.0
-        
-        # シャドウ調整（暗部を明るく）
-        if self.shadow_value != 0:
-            shadow_factor = self.shadow_value / 100.0
-            mask = img_normalized < 0.5  # 暗部マスク
-            img_normalized = np.where(mask, 
-                                    img_normalized + shadow_factor * (0.5 - img_normalized), 
-                                    img_normalized)
-        
-        # ハイライト調整（明部を暗く）  
-        if self.highlight_value != 0:
-            highlight_factor = self.highlight_value / 100.0
-            mask = img_normalized > 0.5  # 明部マスク
-            img_normalized = np.where(mask,
-                                    img_normalized - highlight_factor * (img_normalized - 0.5),
-                                    img_normalized)
-        
-        return img_normalized * 255.0
-    
-    def _apply_temperature(self, img_array: np.ndarray) -> np.ndarray:
-        """色温度調整を適用"""
-        if self.temperature_value > 0:  # 暖色系
-            factor = self.temperature_value / 100.0
-            img_array[:, :, 0] = np.clip(img_array[:, :, 0] * (1.0 + factor * 0.3), 0, 255)  # 赤を強化
-            img_array[:, :, 2] = np.clip(img_array[:, :, 2] * (1.0 - factor * 0.2), 0, 255)  # 青を弱化
-        else:  # 寒色系
-            factor = abs(self.temperature_value) / 100.0
-            img_array[:, :, 0] = np.clip(img_array[:, :, 0] * (1.0 - factor * 0.2), 0, 255)  # 赤を弱化
-            img_array[:, :, 2] = np.clip(img_array[:, :, 2] * (1.0 + factor * 0.3), 0, 255)  # 青を強化
-        
-        return img_array
-    
-    def apply_histogram_equalization(self, image: Image.Image) -> Image.Image:
-        """ヒストグラム均等化を適用"""
-        try:
-            print(f"📊 ヒストグラム均等化開始...")
-            
-            # OpenCVフォーマットに変換
-            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            
-            # YUVカラースペースに変換してY（輝度）チャンネルのみ均等化
-            yuv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2YUV)
-            yuv_image[:, :, 0] = cv2.equalizeHist(yuv_image[:, :, 0])
-            
-            # BGRに戻してPIL形式に変換
-            cv_image = cv2.cvtColor(yuv_image, cv2.COLOR_YUV2BGR)
-            result_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-            
-            print(f"✅ ヒストグラム均等化完了")
-            return result_image
-            
-        except Exception as e:
-            print(f"❌ ヒストグラム均等化エラー: {e}")
-            return image
-    
-    def apply_binary_threshold(self, image: Image.Image) -> Image.Image:
-        """2値化を適用"""
-        try:
-            print(f"📐 2値化開始: 閾値={self.threshold_value}")
-            
-            # OpenCVフォーマットに変換
-            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-            gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-            
-            # 2値化実行
-            _, binary_image = cv2.threshold(gray_image, self.threshold_value, 255, cv2.THRESH_BINARY)
-            
-            # グレースケールをRGBに変換してPIL形式に戻す
-            binary_rgb = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2RGB)
-            result_image = Image.fromarray(binary_rgb)
-            
-            print(f"✅ 2値化完了")
-            return result_image
-            
-        except Exception as e:
-            print(f"❌ 2値化エラー: {e}")
-            return image
-    
-    def reset_parameters(self) -> None:
-        """パラメータをリセット"""
-        print(f"🔄 濃度調整パラメータリセット")
-        
-        # まず基底クラスのリセットを実行（スライダーの値をリセット）
-        super().reset_parameters()
-        
-        # スライダーの値変更後、手動で変数を同期
-        self.gamma_value = 1.0
-        self.shadow_value = 0
-        self.highlight_value = 0
-        self.temperature_value = 0
-        self.threshold_value = 127
-        
-        # カーブエディタ関連のリセット
-        self.use_curve_gamma = False
-        self.gamma_lut = None
-        
-        # 個別機能の状態もリセット
-        self.applied_binary = False
-        self.applied_histogram = False
-        
-        # ガンマ補正方式をスライダーに戻す
-        if hasattr(self, 'gamma_mode_var'):
-            self.gamma_mode_var.set("slider")
-            self._on_gamma_mode_change()
-        
-        # カーブエディタをリセット
-        if CURVE_EDITOR_AVAILABLE and hasattr(self, 'curve_editor'):
-            self.curve_editor._reset_curve()
-        
-        # スライダーの値を明示的に設定してコールバックを強制実行
-        if 'gamma' in self._sliders:
-            self._sliders['gamma'].set(1.0)
-        if 'shadow' in self._sliders:
-            self._sliders['shadow'].set(0)
-        if 'highlight' in self._sliders:
-            self._sliders['highlight'].set(0)
-        if 'temperature' in self._sliders:
-            self._sliders['temperature'].set(0)
-        if 'threshold' in self._sliders:
-            self._sliders['threshold'].set(127)
-        
-        # パラメータ変更を通知
-        self._on_parameter_change()
-    
     def get_parameters(self) -> Dict[str, Any]:
         """現在のパラメータを取得"""
-        # 実際の変数値を返す（スライダーの値ではなく）
         params: Dict[str, Any] = {
             'shadow': self.shadow_value,
             'highlight': self.highlight_value,
             'temperature': self.temperature_value,
             'threshold': self.threshold_value
         }
-        
-        # ガンマ補正のパラメータは使用モードに応じて変更
-        if self.use_curve_gamma and self.gamma_lut is not None:
-            params['gamma_mode'] = 'curve'
-            params['gamma_curve'] = 'custom'  # カーブが設定されていることを示す
-        else:
-            params['gamma_mode'] = 'slider'
-            params['gamma'] = self.gamma_value
-        
         return params
+
+    # --- 2値化関連 ---
+    def setup_threshold_ui(self, parent):
+        """2値化UI部品生成"""
+        if not hasattr(self, '_sliders'):
+            self._sliders = {}
+        if not hasattr(self, '_labels'):
+            self._labels = {}
+        if not hasattr(self, '_buttons'):
+            self._buttons = {}
+        threshold_frame = ctk.CTkFrame(parent)
+        threshold_frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(threshold_frame, text="2値化", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        self._sliders['threshold'], self._labels['threshold'] = PluginUIHelper.create_slider_with_label(
+            parent=threshold_frame,
+            text="閾値",
+            from_=0,
+            to=255,
+            default_value=127,
+            command=self.on_threshold_change,
+            value_format="{:.0f}"
+        )
+        self._buttons['binary'] = PluginUIHelper.create_button(
+            threshold_frame,
+            text="2値化実行",
+            command=lambda: (self.binary_threshold_callback() if hasattr(self, 'binary_threshold_callback') and callable(self.binary_threshold_callback) else self.on_apply_binary_threshold()) if self.image is not None else None
+        )
+
+    def set_binary_threshold_callback(self, callback):
+        """2値化用のコールバックを設定"""
+        self.binary_threshold_callback = callback
+
+    def process_binary_threshold(self, image: Image.Image) -> Image.Image:
+        """2値化処理API"""
+        return self.apply_binary_threshold(image)
+
+    def on_threshold_change(self, value: float) -> None:
+        """閾値変更時の処理（イベントハンドラ）"""
+        self.threshold_value = int(value)
+        if hasattr(self, '_labels') and 'threshold' in self._labels:
+            self._labels['threshold'].configure(text=f"{self.threshold_value}")
+        print(f"📐 閾値更新: {self.threshold_value}")
+        self._on_parameter_change()
+
+    def on_apply_binary_threshold(self) -> None:
+        """2値化実行（イベントハンドラ）"""
+        self.applied_binary = True
+        print(f"📐 2値化実行: 閾値={self.threshold_value}")
+        if hasattr(self, 'binary_threshold_callback') and callable(self.binary_threshold_callback):
+            self.binary_threshold_callback()
+
+    def on_gamma_change(self, value: float) -> None:
+        """ガンマ値変更時の処理"""
+        self.gamma_value = float(value)
+        if hasattr(self, '_labels') and 'gamma' in self._labels:
+            self._labels['gamma'].configure(text=f"{self.gamma_value:.2f}")
+        print(f"🟣 ガンマ値更新: {self.gamma_value}")
+        self._on_parameter_change()
+
+    def on_shadow_change(self, value: float) -> None:
+        """シャドウ値変更時の処理"""
+        self.shadow_value = int(value)
+        print(f"[DEBUG] on_shadow_change: value={value}, self.shadow_value={self.shadow_value}, self.image={type(self.image)}")
+        if hasattr(self, '_labels') and 'shadow' in self._labels:
+            self._labels['shadow'].configure(text=f"{self.shadow_value}")
+        print(f"🌑 シャドウ値更新: {self.shadow_value}")
+        self._on_parameter_change()
+
+    def on_highlight_change(self, value: float) -> None:
+        """ハイライト値変更時の処理"""
+        self.highlight_value = int(value)
+        print(f"[DEBUG] on_highlight_change: value={value}, self.highlight_value={self.highlight_value}, self.image={type(self.image)}")
+        if hasattr(self, '_labels') and 'highlight' in self._labels:
+            self._labels['highlight'].configure(text=f"{self.highlight_value}")
+        print(f"💡 ハイライト値更新: {self.highlight_value}")
+        self._on_parameter_change()
+
+    def on_temperature_change(self, value: float) -> None:
+        """色温度値変更時の処理"""
+        self.temperature_value = int(value)
+        if hasattr(self, '_labels') and 'temperature' in self._labels:
+            self._labels['temperature'].configure(text=f"{self.temperature_value}")
+        print(f"🌡️ 色温度値更新: {self.temperature_value}")
+        self._on_parameter_change()
+
+    def apply_binary_threshold(self, image: Image.Image) -> Image.Image:
+        """2値化を適用"""
+        try:
+            print(f"📐 2値化開始: 閾値={self.threshold_value}")
+            print(f"[DEBUG] threshold_value type: {type(self.threshold_value)}, value: {self.threshold_value}")
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
+            _, binary_image = cv2.threshold(gray_image, int(self.threshold_value), 255, cv2.THRESH_BINARY)
+            binary_rgb = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2RGB)
+            result_image = Image.fromarray(binary_rgb)
+            print(f"✅ 2値化完了")
+            return result_image
+        except Exception as e:
+            print(f"❌ 2値化エラー: {e}")
+            return image
+
+    def set_update_image_callback(self, callback):
+        """画像表示コールバックをセット"""
+        self.update_image_callback = callback
+
+

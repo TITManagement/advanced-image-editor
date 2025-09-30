@@ -20,6 +20,38 @@ from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
 
 
 class FilterProcessingPlugin(ImageProcessorPlugin):
+    def setup_ui(self, parent: ctk.CTkFrame) -> None:
+        """フィルター処理UI生成"""
+        self._sliders = {}
+        self._labels = {}
+        self._buttons = {}
+        # ブラー強度
+        self._sliders['blur'], self._labels['blur'] = PluginUIHelper.create_slider_with_label(
+            parent=parent,
+            text="ガウシアンブラー",
+            from_=0,
+            to=20,
+            default_value=0,
+            command=self._on_blur_change,
+            value_format="{:.0f}"
+        )
+        # シャープニング強度
+        self._sliders['sharpen'], self._labels['sharpen'] = PluginUIHelper.create_slider_with_label(
+            parent=parent,
+            text="シャープニング",
+            from_=0,
+            to=10,
+            default_value=0,
+            command=self._on_sharpen_change,
+            value_format="{:.1f}"
+        )
+        # フィルターボタン群
+        filter_frame = ctk.CTkFrame(parent)
+        filter_frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(filter_frame, text="特殊フィルター", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+        # ノイズ除去セクション
+        denoise_section = ctk.CTkFrame(filter_frame)
+        denoise_section.pack(fill="x", padx=5, pady=2)
     """フィルター処理プラグイン"""
     
     def __init__(self):

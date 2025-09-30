@@ -12,6 +12,9 @@ import customtkinter as ctk
 
 
 class ImageProcessorPlugin(ABC):
+    def setup_ui(self, parent):
+        """UI未実装プラグイン用のダミー"""
+        pass
     """
     画像処理プラグインの基底クラス
     全ての画像処理プラグインはこのクラスを継承する必要があります
@@ -24,6 +27,15 @@ class ImageProcessorPlugin(ABC):
         self._sliders = {}
         self._labels = {}
         self._buttons = {}
+        # undo/バックアップ用属性（全プラグインで参照可能）
+        self.special_filter_backup = None
+        self.morphology_backup = None
+        self.contour_backup = None
+        self.features_backup = None
+        self.frequency_backup = None
+        self.blur_backup = None
+        self.noise_backup = None
+        self.histogram_backup = None
         
     @abstractmethod
     def get_display_name(self) -> str:
