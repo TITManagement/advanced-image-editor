@@ -20,63 +20,95 @@ from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
 
 
 class FilterProcessingPlugin(ImageProcessorPlugin):
-    def setup_ui(self, parent: ctk.CTkFrame) -> None:
-        """フィルター処理UI生成"""
-        self._sliders = {}
-        self._labels = {}
-        self._buttons = {}
-        # ブラー強度
-        self._sliders['blur'], self._labels['blur'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="ガウシアンブラー",
-            from_=0,
-            to=20,
-            default_value=0,
-            command=self._on_blur_change,
-            value_format="{:.0f}"
-        )
-        # シャープニング強度
-        self._sliders['sharpen'], self._labels['sharpen'] = PluginUIHelper.create_slider_with_label(
-            parent=parent,
-            text="シャープニング",
-            from_=0,
-            to=10,
-            default_value=0,
-            command=self._on_sharpen_change,
-            value_format="{:.1f}"
-        )
-        # フィルターボタン群
-        filter_frame = ctk.CTkFrame(parent)
-        filter_frame.pack(fill="x", padx=5, pady=5)
-        ctk.CTkLabel(filter_frame, text="特殊フィルター", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
-        # ノイズ除去セクション
-        denoise_section = ctk.CTkFrame(filter_frame)
-        denoise_section.pack(fill="x", padx=5, pady=2)
-    """フィルター処理プラグイン"""
+    """
+    フィルター処理プラグイン (FilterProcessingPlugin)
+    --------------------------------------------------
+    設計方針:
+    - analysis_plugin.pyの設計パターンに準拠
+    - 外部APIはパブリックメソッド (アンダースコアなし) として公開
+    - 内部処理はプライベートメソッド (先頭にアンダースコア) として隠蔽
+    - ガウシアンブラー、シャープニング、特殊フィルター、モルフォロジー演算、輪郭検出を提供
+
+    推奨メソッド並び順:
+    1. 初期化・基本情報
+    2. コールバック設定（外部API）
+    3. UI生成・操作（外部API）
+    4. 画像処理API（外部API）
+    5. イベントハンドラ・内部処理（プライベート）
+    6. 特殊処理メソッド（プライベート）
+    7. ヘルパーメソッド（プライベート）
+    """
+
+    # ===============================
+    # 1. 初期化・基本情報
+    # ===============================
     
     def __init__(self):
         super().__init__("filter_processing", "1.0.0")
-        self.blur_strength = 0
-        self.sharpen_strength = 0
-        self.current_filter = "none"
-        self.morph_kernel_size = 5
         
-        # 個別機能の状態追跡
-        self.applied_special_filter = None
-        self.applied_morphology = None
-        self.applied_contour = False
+        # --- パラメータ値（プライベート属性） ---
+        self._blur_strength = 0
+        self._sharpen_strength = 0.0
+        self._current_filter = "none"
+        self._morph_kernel_size = 5
         
-        # 画像バックアップシステム
-        self.backup_image = None  # 処理前の画像をバックアップ
-        self.special_filter_backup = None  # 特殊フィルター適用前のバックアップ
-        self.morphology_backup = None      # モルフォロジー処理前のバックアップ
-        self.contour_backup = None         # 輪郭検出処理前のバックアップ
+        # --- 機能状態追跡 ---
+        self._applied_special_filter = None
+        self._applied_morphology = None
+        self._applied_contour = False
+        
+        # --- UI要素辞書 ---
+        self._sliders: Dict[str, ctk.CTkSlider] = {}
+        self._labels: Dict[str, ctk.CTkLabel] = {}
+        self._buttons: Dict[str, ctk.CTkButton] = {}
+        
+        # --- コールバック関数 ---
+        self._special_filter_callback = None
+        self._morphology_callback = None
+        self._contour_callback = None
+        self._undo_special_filter_callback = None
+        self._undo_morphology_callback = None
+        self._undo_contour_callback = None
         
     def get_display_name(self) -> str:
+        """プラグインの表示名を取得"""
         return "フィルター処理"
     
     def get_description(self) -> str:
-        return "ガウシアンブラー、シャープニング(0-10強度)、ノイズ除去などのフィルター処理を提供します"
+        """プラグインの説明を取得"""
+        return "ガウシアンブラー、シャープニング、特殊フィルター、モルフォロジー演算、輪郭検出を提供します"
+
+    # ===============================
+    # 2. コールバック設定（外部API）
+    # ===============================
+    
+    def set_special_filter_callback(self, callback):
+        """特殊フィルター用のコールバックを設定"""
+        self._special_filter_callback = callback
+    
+    def set_morphology_callback(self, callback):
+        """モルフォロジー演算用のコールバックを設定"""
+        self._morphology_callback = callback
+    
+    def set_contour_callback(self, callback):
+        """輪郭検出用のコールバックを設定"""
+        self._contour_callback = callback
+    
+    def set_undo_special_filter_callback(self, callback):
+        """特殊フィルターundo用のコールバックを設定"""
+        self._undo_special_filter_callback = callback
+    
+    def set_undo_morphology_callback(self, callback):
+        """モルフォロジー演算undo用のコールバックを設定"""
+        self._undo_morphology_callback = callback
+    
+    def set_undo_contour_callback(self, callback):
+        """輪郭検出undo用のコールバックを設定"""
+        self._undo_contour_callback = callback
+
+    # ===============================
+    # 3. UI生成・操作（外部API）
+    # ===============================
     
     def create_ui(self, parent: ctk.CTkFrame) -> None:
         """フィルター処理UIを作成"""
@@ -269,58 +301,66 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self._buttons['undo_contour'].pack(side="left")
         self._buttons['undo_contour'].configure(state="disabled")
     
+    # ===============================
+    # 5. イベントハンドラー（コールバック）
+    # ===============================
+    
     def _on_blur_change(self, value: float) -> None:
-        """ブラー強度変更時の処理"""
-        self.blur_strength = int(value)
-        print(f"🌀 ブラー強度更新: {self.blur_strength}")
+        """ブラー強度変更時のコールバック"""
+        self._blur_strength = self._clamp_value(int(value), 0, 20)
+        self._update_value_label('blur', self._blur_strength)
         self._on_parameter_change()
     
     def _on_sharpen_change(self, value: float) -> None:
-        """シャープニング強度変更時の処理"""
-        self.sharpen_strength = float(value)
-        print(f"🔪 シャープニング強度更新: {self.sharpen_strength}")
+        """シャープニング強度変更時のコールバック"""
+        self._sharpen_strength = self._clamp_value(float(value), 0.0, 10.0)
+        self._update_value_label('sharpen', self._sharpen_strength)
         self._on_parameter_change()
     
     def _on_kernel_change(self, value: float) -> None:
-        """カーネルサイズ変更時の処理"""
-        self.morph_kernel_size = int(value)
-        if self.morph_kernel_size % 2 == 0:  # 奇数にする
-            self.morph_kernel_size += 1
-        print(f"🔧 カーネルサイズ更新: {self.morph_kernel_size}")
+        """カーネルサイズ変更時のコールバック"""
+        kernel_size = self._clamp_value(int(value), 3, 15)
+        # 奇数にする
+        self._morph_kernel_size = kernel_size if kernel_size % 2 == 1 else kernel_size + 1
+        self._update_value_label('kernel', self._morph_kernel_size)
+
+    # ===============================
+    # 6. アクション・リセット処理
+    # ===============================
     
     def _apply_special_filter(self, filter_type: str) -> None:
         """特殊フィルター適用"""
-        self.current_filter = filter_type
-        self.applied_special_filter = filter_type
+        self._current_filter = filter_type
+        self._applied_special_filter = filter_type
         print(f"✨ 特殊フィルター適用: {filter_type}")
         
         # undoボタンを有効化
         self._enable_undo_button(f"undo_{filter_type}")
         
-        if hasattr(self, 'special_filter_callback'):
-            self.special_filter_callback(filter_type)
+        if self._special_filter_callback:
+            self._special_filter_callback(filter_type)
     
     def _apply_morphology(self, morph_type: str) -> None:
         """モルフォロジー演算適用"""
-        self.applied_morphology = morph_type
+        self._applied_morphology = morph_type
         print(f"🔧 モルフォロジー演算: {morph_type}")
         
         # undoボタンを有効化
         self._enable_undo_button("undo_morphology")
         
-        if hasattr(self, 'morphology_callback'):
-            self.morphology_callback(morph_type)
+        if self._morphology_callback:
+            self._morphology_callback(morph_type)
     
     def _apply_contour_detection(self) -> None:
         """輪郭検出実行"""
-        self.applied_contour = True
+        self._applied_contour = True
         print(f"🎯 輪郭検出実行")
         
         # undoボタンを有効化
         self._enable_undo_button("undo_contour")
         
-        if hasattr(self, 'contour_callback'):
-            self.contour_callback()
+        if self._contour_callback:
+            self._contour_callback()
     
     def _enable_undo_button(self, button_name: str) -> None:
         """undoボタンを有効化"""
@@ -337,135 +377,153 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         print(f"🔄 特殊フィルター取消: {filter_type}")
         
         # 状態をリセット
-        self.applied_special_filter = None
-        self.current_filter = "none"
+        self._applied_special_filter = None
+        self._current_filter = "none"
         
         # undoボタンを無効化
         self._disable_undo_button(f"undo_{filter_type}")
         
         # コールバックがあれば実行
-        if hasattr(self, 'undo_special_filter_callback'):
-            self.undo_special_filter_callback(filter_type)
+        if self._undo_special_filter_callback:
+            self._undo_special_filter_callback(filter_type)
     
     def _undo_morphology(self) -> None:
         """モルフォロジー演算のundo"""
         print(f"🔄 モルフォロジー演算取消")
         
         # 状態をリセット
-        self.applied_morphology = None
+        self._applied_morphology = None
         
         # undoボタンを無効化
         self._disable_undo_button("undo_morphology")
         
         # コールバックがあれば実行
-        if hasattr(self, 'undo_morphology_callback'):
-            self.undo_morphology_callback()
+        if self._undo_morphology_callback:
+            self._undo_morphology_callback()
     
     def _undo_contour(self) -> None:
         """輪郭検出のundo"""
         print(f"🔄 輪郭検出取消")
         
         # 状態をリセット
-        self.applied_contour = False
+        self._applied_contour = False
         
         # undoボタンを無効化
         self._disable_undo_button("undo_contour")
         
         # コールバックがあれば実行
-        if hasattr(self, 'undo_contour_callback'):
-            self.undo_contour_callback()
+        if self._undo_contour_callback:
+            self._undo_contour_callback()
     
-    def set_special_filter_callback(self, callback):
-        """特殊フィルター用のコールバックを設定"""
-        self.special_filter_callback = callback
+
     
-    def set_morphology_callback(self, callback):
-        """モルフォロジー演算用のコールバックを設定"""
-        self.morphology_callback = callback
+    # ===============================
+    # 4. 画像処理API（外部API）
+    # ===============================
     
-    def set_contour_callback(self, callback):
-        """輪郭検出用のコールバックを設定"""
-        self.contour_callback = callback
-    
-    def set_undo_special_filter_callback(self, callback):
-        """特殊フィルターundo用のコールバックを設定"""
-        self.undo_special_filter_callback = callback
-    
-    def set_undo_morphology_callback(self, callback):
-        """モルフォロジー演算undo用のコールバックを設定"""
-        self.undo_morphology_callback = callback
-    
-    def set_undo_contour_callback(self, callback):
-        """輪郭検出undo用のコールバックを設定"""
-        self.undo_contour_callback = callback
-    
-    def process_image(self, image: Image.Image, **params) -> Image.Image:
-        """フィルター処理を適用"""
+    def process_image(self, image: Image.Image) -> Image.Image:
+        """
+        フィルター処理を適用
+        
+        Args:
+            image (Image.Image): 処理対象の画像
+            
+        Returns:
+            Image.Image: 処理後の画像（エラー時は元画像）
+        """
+        if image is None:
+            self._log_error("Input image is None")
+            return image
+            
         try:
-            if not image:
-                return image
+            processed_image = image.copy()
             
-            print(f"🔄 フィルター処理開始...")
-            print(f"   📊 ブラー強度: {self.blur_strength}")
-            print(f"   📊 シャープニング強度: {self.sharpen_strength}")
+            # ガウシアンブラーの適用
+            processed_image = self._apply_gaussian_blur(processed_image)
             
-            result_image = image.copy()
+            # シャープニングの適用
+            processed_image = self._apply_sharpening(processed_image)
             
-            # ガウシアンブラー
-            if self.blur_strength > 0:
-                print(f"🌀 ガウシアンブラー適用: {self.blur_strength}")
-                # OpenCVでガウシアンブラーを適用
-                cv_image = cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
-                kernel_size = int(self.blur_strength * 2) + 1  # 奇数にする
-                if kernel_size > 1:
-                    cv_image = cv2.GaussianBlur(cv_image, (kernel_size, kernel_size), 0)
-                    result_image = Image.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-                    print(f"   ✅ ブラー適用完了: カーネルサイズ={kernel_size}")
-            
-            # シャープニング
-            if self.sharpen_strength > 0:
-                print(f"🔪 シャープニング適用: {self.sharpen_strength}")
-                
-                # 2段階のシャープニング処理
-                if self.sharpen_strength <= 5:
-                    # 軽度〜中程度: PILのUnsharpMaskを使用
-                    enhancer_factor = 1.0 + (self.sharpen_strength / 2.0)
-                    radius = min(2 + int(self.sharpen_strength / 3), 5)
-                    percent = int(enhancer_factor * 150)
-                    threshold = max(0, int(self.sharpen_strength / 5))
-                    
-                    result_image = result_image.filter(ImageFilter.UnsharpMask(
-                        radius=radius, 
-                        percent=percent, 
-                        threshold=threshold
-                    ))
-                    print(f"   ✅ PIL シャープニング: factor={enhancer_factor:.2f}, radius={radius}, percent={percent}")
-                    
-                else:
-                    # 強度: OpenCVカーネルベースのシャープニング
-                    cv_image = cv2.cvtColor(np.array(result_image), cv2.COLOR_RGB2BGR)
-                    
-                    # 強力なシャープニングカーネル
-                    strength = (self.sharpen_strength - 5) / 5.0  # 0-1の範囲に正規化
-                    kernel = np.array([
-                        [-1, -1, -1],
-                        [-1, 9 + strength * 8, -1],  # 中央値を動的に調整
-                        [-1, -1, -1]
-                    ], dtype=np.float32)
-                    
-                    sharpened = cv2.filter2D(cv_image, -1, kernel)
-                    result_image = Image.fromarray(cv2.cvtColor(sharpened, cv2.COLOR_BGR2RGB))
-                    print(f"   ✅ OpenCV シャープニング: strength={strength:.2f}, center={9 + strength * 8:.2f}")
-                    
-                print(f"   🔪 シャープニング適用完了")
-            
-            print(f"✅ フィルター処理完了")
-            return result_image
+            return processed_image
             
         except Exception as e:
-            print(f"❌ フィルター処理エラー: {e}")
-            import traceback
-            traceback.print_exc()
+            self._log_error(f"Image processing error: {e}")
+            return image  # フォールバック: 元画像を返す
+
+    def _apply_gaussian_blur(self, image: Image.Image) -> Image.Image:
+        """ガウシアンブラーを適用"""
+        if self._blur_strength <= 0:
+            return image
+        
+        try:
+            # カーネルサイズの計算（奇数にする）
+            kernel_size = int(self._blur_strength * 2) + 1
+            kernel_size = max(1, min(kernel_size, 51))  # 制限値適用 (1-51)
+            
+            if kernel_size <= 1:
+                return image
+            
+            # OpenCVでガウシアンブラーを適用
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            blurred = cv2.GaussianBlur(cv_image, (kernel_size, kernel_size), 0)
+            return Image.fromarray(cv2.cvtColor(blurred, cv2.COLOR_BGR2RGB))
+            
+        except Exception as e:
+            self._log_error(f"Gaussian blur error: {e}")
+            return image
+
+    def _apply_sharpening(self, image: Image.Image) -> Image.Image:
+        """シャープニングを適用"""
+        if self._sharpen_strength <= 0:
+            return image
+        
+        try:
+            clamped_strength = max(0.0, min(self._sharpen_strength, 10.0))  # 制限値適用
+            
+            if clamped_strength <= 5:
+                return self._apply_mild_sharpening(image, clamped_strength)
+            else:
+                return self._apply_strong_sharpening(image, clamped_strength)
+                
+        except Exception as e:
+            self._log_error(f"Sharpening error: {e}")
+            return image
+
+    def _apply_mild_sharpening(self, image: Image.Image, strength: float) -> Image.Image:
+        """軽度〜中程度のシャープニング（PIL UnsharpMask使用）"""
+        try:
+            enhancer_factor = 1.0 + (strength / 2.0)
+            radius = min(2 + int(strength / 3), 5)
+            percent = int(enhancer_factor * 150)
+            threshold = max(0, int(strength / 5))
+            
+            return image.filter(ImageFilter.UnsharpMask(
+                radius=radius, 
+                percent=percent, 
+                threshold=threshold
+            ))
+        except Exception as e:
+            self._log_error(f"Mild sharpening error: {e}")
+            return image
+
+    def _apply_strong_sharpening(self, image: Image.Image, strength: float) -> Image.Image:
+        """強度のシャープニング（OpenCVカーネル使用）"""
+        try:
+            cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            
+            # 強力なシャープニングカーネル
+            normalized_strength = (strength - 5) / 5.0  # 0-1の範囲に正規化
+            kernel = np.array([
+                [-1, -1, -1],
+                [-1, 9 + normalized_strength * 8, -1],  # 中央値を動的に調整
+                [-1, -1, -1]
+            ], dtype=np.float32)
+            
+            sharpened = cv2.filter2D(cv_image, -1, kernel)
+            return Image.fromarray(cv2.cvtColor(sharpened, cv2.COLOR_BGR2RGB))
+            
+        except Exception as e:
+            self._log_error(f"Strong sharpening error: {e}")
             return image
     
     def apply_special_filter(self, image: Image.Image, filter_type: str) -> Image.Image:
@@ -511,7 +569,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
             
             # カーネル作成
-            kernel = np.ones((self.morph_kernel_size, self.morph_kernel_size), np.uint8)
+            kernel = np.ones((self._morph_kernel_size, self._morph_kernel_size), np.uint8)
             
             # モルフォロジー演算実行
             if operation == "erosion":
@@ -583,8 +641,57 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     def get_parameters(self) -> Dict[str, Any]:
         """現在のパラメータを取得"""
         return {
-            'blur': self.blur_strength,
-            'sharpen': self.sharpen_strength,
-            'filter': self.current_filter,
-            'kernel': self.morph_kernel_size
+            'blur': self._blur_strength,
+            'sharpen': self._sharpen_strength,
+            'filter': self._current_filter,
+            'kernel': self._morph_kernel_size
         }
+
+    def reset_parameters(self) -> None:
+        """全パラメータをリセット"""
+        self._blur_strength = 0
+        self._sharpen_strength = 0.0
+        self._current_filter = "none"
+        self._morph_kernel_size = 5
+        
+        # 機能状態をリセット
+        self._applied_special_filter = None
+        self._applied_morphology = None
+        self._applied_contour = False
+        
+        # UIの更新
+        if 'blur' in self._sliders:
+            self._sliders['blur'].set(0)
+            self._update_value_label('blur', 0)
+        if 'sharpen' in self._sliders:
+            self._sliders['sharpen'].set(0.0)
+            self._update_value_label('sharpen', 0.0)
+        if 'kernel' in self._sliders:
+            self._sliders['kernel'].set(5)
+            self._update_value_label('kernel', 5)
+        
+        # undoボタンを無効化
+        for button_name in ['undo_denoise', 'undo_emboss', 'undo_edge', 'undo_morphology', 'undo_contour']:
+            self._disable_undo_button(button_name)
+        
+        self._on_parameter_change()
+
+    # ===============================
+    # 7. 内部ヘルパーメソッド（プライベート）
+    # ===============================
+    
+    def _clamp_value(self, value, min_val, max_val):
+        """値を指定範囲内に制限"""
+        return max(min_val, min(value, max_val))
+    
+    def _update_value_label(self, parameter: str, value) -> None:
+        """値ラベルの更新"""
+        if parameter in self._labels:
+            if isinstance(value, float):
+                self._labels[parameter].configure(text=f"{value:.1f}")
+            else:
+                self._labels[parameter].configure(text=f"{value:.0f}")
+    
+    def _log_error(self, message: str) -> None:
+        """エラーログの出力"""
+        print(f"[ERROR] FilterProcessingPlugin: {message}")

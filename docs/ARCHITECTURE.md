@@ -117,6 +117,53 @@ Advanced Image Editorは、**プラグインアーキテクチャ**を採用し�
 
 ## プラグインシステム
 
+### プラグイン内部設計パターン（analysis_plugin.pyベース）
+
+#### メソッド分類・命名規則
+
+```python
+# === 1. 基本情報・初期化セクション ===
+def __init__(self, name="plugin_name"):          # プラグイン初期化
+def get_display_name(self) -> str:               # UI表示名
+def get_description(self) -> str:                # 機能説明  
+def get_parameters(self) -> Dict[str, Any]:      # パラメータ取得
+def set_image(self, image: Image.Image):         # 画像設定
+
+# === 2. 外部コールバック設定API（パブリック） ===
+def set_display_image_callback(self, callback):  # 画像表示用
+def set_[feature]_callback(self, callback):      # 機能別コールバック
+def set_undo_[feature]_callback(self, callback): # Undo機能用
+
+# === 3. UI生成・管理API（パブリック） ===  
+def setup_ui(self, parent):                      # UI初期化
+def create_ui(self, parent):                     # UI要素作成
+
+# === 4. 画像処理API（パブリック） ===
+def apply_[feature](self, image, params):        # 機能別処理
+def process_image(self, image, **params):        # 統合処理
+
+# === 5. 内部イベントハンドラ（プライベート） ===
+def _on_[action]_button(self):                   # ボタンイベント
+def _apply_[feature](self, params):              # 内部処理実行
+def _undo_[feature](self):                       # 取消処理
+def _enable_undo_button(self, key):              # UI状態制御
+def _disable_undo_button(self, key):             # UI状態制御
+```
+
+#### イベント処理フローパターン
+
+```mermaid
+graph LR
+    A[UI Button] --> B[_on_button_click]
+    B --> C[apply_feature API]
+    C --> D[display_image_callback]
+    D --> E[_enable_undo_button]
+    
+    F[Undo Button] --> G[_undo_feature]
+    G --> H[display_image_callback]
+    H --> I[_disable_undo_button]
+```
+
 ### プラグイン基底クラス設計
 
 ```python
@@ -273,6 +320,75 @@ class PluginManager:
                     # エラー時は処理を継続（前の状態を保持）
         
         return result_image
+```
+
+### コールバック設計パターン
+
+#### 機能別コールバック分離
+- **画像表示**: `set_display_image_callback` - 結果画像の即座表示
+- **機能実行**: `set_[feature]_callback` - 特定機能の外部委譲  
+- **Undo処理**: `set_undo_[feature]_callback` - 取消操作の外部制御
+
+#### コールバック優先度制御
+```python
+def _apply_feature_detection(self, feature_type):
+    # 1. 外部コールバック優先実行
+    if hasattr(self, "feature_callback") and callable(self.feature_callback):
+        self.feature_callback(feature_type)
+    else:
+        # 2. デフォルト内部処理
+        if self.image is not None:
+            result_img = self.apply_feature_detection(self.image, feature_type)
+            if hasattr(self, 'display_image_callback'):
+                self.display_image_callback(result_img)
+```
+
+### UI状態管理パターン（Undoボタン制御）
+
+#### 状態制御メソッド
+```python
+def _enable_undo_button(self, key):
+    """指定したUndoボタンを有効化する"""
+    if hasattr(self, '_buttons') and key in self._buttons:
+        self._buttons[key].configure(state="normal")
+
+def _disable_undo_button(self, key):
+    """指定したUndoボタンを無効化する"""
+    if hasattr(self, '_buttons') and key in self._buttons:
+        self._buttons[key].configure(state="disabled")
+```
+
+#### UI一貫性ルール
+- 処理実行時: 対応するUndoボタンを有効化
+- Undo実行時: Undoボタンを無効化
+- エラー時: 状態をリセット
+
+### エラーハンドリング設計
+
+#### 段階的フォールバック
+```python
+def apply_feature_detection(self, image: Image.Image, feature_type: str) -> Image.Image:
+    try:
+        # メイン処理
+        if feature_type == "sift":
+            if hasattr(cv2, "SIFT_create"):
+                sift = cv2.SIFT_create()
+            elif hasattr(cv2, "xfeatures2d"):
+                sift = cv2.xfeatures2d.SIFT_create()
+            else:
+                print("SIFTが利用できません")
+                return image  # フォールバック: 元画像返却
+    except Exception as e:
+        print(f"処理エラー: {e}")
+        return image  # 安全な復帰
+```
+
+#### ログ出力レベル
+- `print("✅ 成功")`: 正常完了
+- `print("⚠️ 警告")`: 警告・代替処理
+- `print("❌ エラー")`: エラー・失敗
+
+### プラグインマネージャー設計
 ```
 
 ## モジュール設計
@@ -769,6 +885,66 @@ class ConfigurationManager:
             json.dump(self._plugin_configs[plugin_id], f, 
                      ensure_ascii=False, indent=2)
 ```
+
+### プラグイン成熟度評価基準
+
+#### Level 1: 基本実装
+- [ ] 必須メソッド実装完了
+- [ ] 基本UI動作確認
+- [ ] 単体処理動作確認
+
+#### Level 2: 設計準拠（analysis_plugin.py レベル）
+- [ ] メソッド命名規則準拠
+- [ ] コールバック分離実装
+- [ ] エラーハンドリング実装
+- [ ] UI状態管理実装
+- [ ] ログ出力統一
+
+#### Level 3: 高度な拡張性
+- [ ] 動的設定対応
+- [ ] ホットリロード対応
+- [ ] バージョン管理対応
+- [ ] テストカバレッジ90%以上
+
+#### 成熟化チェックリスト
+```python
+# 他プラグインへの適用時の確認項目
+MATURITY_CHECKLIST = {
+    'method_naming': 'パブリック/プライベート命名は適切か？',
+    'callback_separation': 'コールバック分離は実装されているか？', 
+    'error_handling': 'エラー時の安全な復帰処理はあるか？',
+    'ui_state_management': 'Undoボタン等のUI状態制御はあるか？',
+    'logging_consistency': 'ログ出力レベルは統一されているか？',
+    'parameter_validation': 'パラメータ検証は適切か？'
+}
+```
+
+## 推奨実装手順
+
+### プラグイン成熟化プロセス
+
+1. **ARCHITECTURE.mdパターン適用**
+   - 上記設計パターンに従ってプラグインを設計
+   - メソッド命名規則の統一
+   - コールバック分離の実装
+
+2. **段階的リファクタリング**
+   - `basic_plugin.py`, `density_plugin.py`, `filters_plugin.py`を`analysis_plugin.py`パターンに移行
+   - 既存機能を壊さずに段階的に適用
+
+3. **共通ヘルパークラス拡張**
+   - `core/plugin_base.py`に共通メソッド追加（`_enable_undo_button`等）
+   - UI状態管理の統一
+
+4. **テンプレートプラグイン作成**
+   - 新規プラグイン開発用の雛形作成
+   - 設計パターンの標準化
+
+### 品質保証プロセス
+
+1. **成熟度評価**: 各プラグインをLevel 1-3で評価
+2. **相互レビュー**: 他プラグインとの設計一貫性確認
+3. **継続的改善**: フィードバックに基づく設計パターン改良
 
 ---
 
