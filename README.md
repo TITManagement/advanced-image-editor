@@ -46,7 +46,12 @@ python scripts/setup_dev_environment.py
 
 ## 🤝 コントリビューション
 
-プロジェクトへの貢献を歓迎します！[開発者ガイド](docs/DEVELOPER_GUIDE.md)をご覧ください。
+プロジェクトへの貢献を歓迎します！
+
+- **[開発者ガイド](docs/DEVELOPER_GUIDE.md)** - 開発環境の構築と基本的な開発フロー
+- **[設計指針](docs/DESIGN_PRINCIPLES.md)** - コード修正時の基本方針とベストプラクティス
+- **[SmartSliderガイド](docs/SMART_SLIDER_GUIDE.md)** - 統一されたスライダー拡張機能パッケージシステム
+- **[アーキテクチャ](docs/ARCHITECTURE.md)** - システム設計と技術詳細
 
 ## 📄 ライセンス
 

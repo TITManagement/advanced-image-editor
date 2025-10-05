@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Callable, List, Tuple, Union
 from PIL import Image
 import customtkinter as ctk
+import threading
 
 
 class ImageProcessorPlugin(ABC):
@@ -326,3 +327,163 @@ class PluginUIHelper:
         )
         button.pack(padx=5, pady=3)
         return button
+    
+    @staticmethod
+    def create_enhanced_slider_with_label(
+        parent: ctk.CTkFrame,
+        text: str,
+        from_: Union[int, float],
+        to: Union[int, float],
+        default_value: Union[int, float],
+        command: Optional[Callable] = None,
+        value_format: str = "{:.0f}",
+        debounce_delay: float = 0.1,
+        value_type: type = int
+    ) -> Tuple[ctk.CTkSlider, ctk.CTkLabel, 'EnhancedSliderWrapper']:
+        """
+        強化されたラベル付きスライダーを作成（オーバーシュート対策・チャタリング防止付き）
+        
+        Args:
+            parent: 親フレーム
+            text: ラベルテキスト
+            from_: 最小値
+            to: 最大値
+            default_value: デフォルト値
+            command: 値変更時のコールバック
+            value_format: 値の表示フォーマット
+            debounce_delay: デバウンス遅延時間（秒）
+            value_type: 値の型（int または float）
+            
+        Returns:
+            (スライダー, 値ラベル, 強化ラッパー)のタプル
+        """
+        # ラベル
+        label = ctk.CTkLabel(parent, text=text, font=("Arial", 11))
+        label.pack(anchor="w", padx=3, pady=(5, 0))
+        
+        # 値表示ラベル
+        value_label = ctk.CTkLabel(parent, text=value_format.format(default_value), font=("Arial", 9))
+        value_label.pack(anchor="w", padx=3)
+        
+        # スライダー
+        slider = ctk.CTkSlider(
+            parent,
+            from_=int(from_) if isinstance(from_, float) and from_.is_integer() else from_,
+            to=int(to) if isinstance(to, float) and to.is_integer() else to,
+            width=250,
+            height=20
+        )
+        slider.pack(fill="x", padx=10, pady=(2, 8))
+        slider.set(default_value)
+        
+        # 強化ラッパーを作成
+        wrapper = EnhancedSliderWrapper(
+            slider=slider,
+            label=value_label,
+            min_value=from_,
+            max_value=to,
+            value_type=value_type,
+            debounce_delay=debounce_delay,
+            value_format=value_format,
+            callback=command
+        )
+        
+        return slider, value_label, wrapper
+
+
+class EnhancedSliderWrapper:
+    """
+    既存コードとの互換性を保ちながら強化機能を提供するラッパー
+    """
+    
+    def __init__(
+        self,
+        slider: ctk.CTkSlider,
+        label: ctk.CTkLabel,
+        min_value: Union[int, float],
+        max_value: Union[int, float],
+        value_type: type = int,
+        debounce_delay: float = 0.1,
+        value_format: str = "{:.0f}",
+        callback: Optional[Callable] = None
+    ):
+        self.slider = slider
+        self.label = label
+        self.min_value = min_value
+        self.max_value = max_value
+        self.value_type = value_type
+        self.debounce_delay = debounce_delay
+        self.value_format = value_format
+        self.callback = callback
+        
+        # 内部状態
+        self._current_value = min_value
+        self._update_timer: Optional[threading.Timer] = None
+        
+        # スライダーにコールバックを設定
+        self.slider.configure(command=self._on_slider_change)
+    
+    def _clamp_value(self, value: Union[int, float]) -> Union[int, float]:
+        """値を指定範囲内に制限（オーバーシュート対策）"""
+        if self.value_type == int:
+            clamped = max(self.min_value, min(self.max_value, int(round(value))))
+        else:
+            clamped = max(self.min_value, min(self.max_value, float(value)))
+        return clamped
+    
+    def _update_label(self, value: Union[int, float]) -> None:
+        """ラベルの値を更新"""
+        formatted_value = self.value_format.format(value)
+        self.label.configure(text=formatted_value)
+    
+    def _on_slider_change(self, raw_value: float) -> None:
+        """スライダー変更時のコールバック（内部使用）"""
+        # オーバーシュート対策：値を制限
+        clamped_value = self._clamp_value(raw_value)
+        self._current_value = clamped_value
+        
+        # ラベル更新
+        self._update_label(clamped_value)
+        
+        # チャタリング防止：デバウンス処理
+        self._debounced_callback()
+    
+    def _debounced_callback(self) -> None:
+        """デバウンス処理付きコールバック実行"""
+        # 既存のタイマーをキャンセル
+        if self._update_timer:
+            self._update_timer.cancel()
+        
+        # 遅延実行を設定
+        def delayed_callback():
+            try:
+                if self.callback:
+                    self.callback(self._current_value)
+            finally:
+                self._update_timer = None
+        
+        # 新しいタイマーを開始
+        self._update_timer = threading.Timer(self.debounce_delay, delayed_callback)
+        self._update_timer.start()
+    
+    def get_value(self) -> Union[int, float]:
+        """現在の値を取得"""
+        return self._current_value
+    
+    def set_value(self, value: Union[int, float], update_slider: bool = True) -> None:
+        """値を設定"""
+        clamped_value = self._clamp_value(value)
+        self._current_value = clamped_value
+        
+        # ラベル更新
+        self._update_label(clamped_value)
+        
+        # スライダー位置も更新する場合
+        if update_slider:
+            self.slider.set(clamped_value)
+    
+    def cleanup(self) -> None:
+        """リソースのクリーンアップ"""
+        if self._update_timer:
+            self._update_timer.cancel()
+            self._update_timer = None

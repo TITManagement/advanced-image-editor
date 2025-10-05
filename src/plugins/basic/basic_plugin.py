@@ -15,6 +15,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
+from utils.smart_slider import SmartSlider
 
 
 class BasicAdjustmentPlugin(ImageProcessorPlugin):
@@ -27,22 +28,8 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     - 内部処理はプライベートメソッド (先頭にアンダースコア) として隠蔽
     - 明度・コントラスト・彩度の基本的な画像調整を提供
 
-    Level 3 高度機能:            # 3. 遅延実行でスライダーを確実にリセット
-            def force_all_sliders_update():
-                try:
-                    for param, slider in sliders_to_reset:
-                        if slider is not None:  # Noneチェック追加
-                            slider.set(0)
-                            if hasattr(slider, '_variable') and slider._variable is not None:
-                                slider._variable.set(0)
-                            slider.update_idletasks()
-                            print(f"[DEBUG] 遅延更新後{param}スライダー値: {slider.get()}")
-                    self._updating_ui = False
-                    print("✅ 全スライダー遅延更新完了")
-                except Exception as e:
-                    print(f"[ERROR] 遅延更新エラー: {e}")
-                    self._updating_ui = Falseリセット（明度・コントラスト・彩度の組み合わせ）
-    - パラメータ履歴管理（Undo/Redo）
+    Level 3 高度機能:
+    - プリセット機能（明度・コントラスト・彩度の組み合わせ）
     - プラグイン間データ共有（他の調整プラグインとの連携）
     - RGB別ヒストグラム表示
     - コントラストカーブエディタ
@@ -64,7 +51,12 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         super().__init__("basic_adjustment", "1.0.0")
         self.image = None
         
-        # パラメータ値
+        # パラメータ値（内部変数を先に初期化）
+        self._brightness_value = 0
+        self._contrast_value = 0
+        self._saturation_value = 0
+        
+        # プロパティ経由で設定（setterを通す）
         self.brightness_value = 0
         self.contrast_value = 0
         self.saturation_value = 0
@@ -83,14 +75,12 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
             '鮮やか': {'brightness': 10, 'contrast': 15, 'saturation': 20},
             'モノクロ風': {'brightness': -5, 'contrast': 25, 'saturation': -80},
             'ソフト': {'brightness': 5, 'contrast': -10, 'saturation': -15},
-            'ビビッド': {'brightness': 0, 'contrast': 30, 'saturation': 40}
+            'ビビッド': {'brightness': 0, 'contrast': 30, 'saturation': 40},
+            'おまかせ調整': 'auto'  # 画像解析に基づく最適な調整値を自動設定
         }
         self._current_preset_name = None
         
-        # パラメータ履歴管理
-        self._parameter_history = []
-        self._history_index = -1
-        self._max_history_size = 30
+
         
         # プラグイン間連携
         self._plugin_data_exchange = {}
@@ -117,6 +107,9 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         self._sliders = {}
         self._labels = {}
         self._buttons = {}
+        
+        # チャタリング対策
+        self._update_timer = None
 
     def get_display_name(self) -> str:
         """プラグインの表示名を返す"""
@@ -124,7 +117,7 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     
     def get_description(self) -> str:
         """プラグインの説明文を返す"""
-        return "明度、コントラスト、彩度の基本的な画像調整を提供します（Level 3: プリセット、履歴、RGB分析対応）"
+        return "明度、コントラスト、彩度の基本的な画像調整を提供します（Level 3: プリセット、RGB分析対応）"
 
     # ===============================
     # 2. Level 3 高度機能API
@@ -136,8 +129,7 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
             preset_data = {
                 'brightness': self.brightness_value,
                 'contrast': self.contrast_value,
-                'saturation': self.saturation_value,
-                'timestamp': self._get_timestamp()
+                'saturation': self.saturation_value
             }
             self._presets[name] = preset_data
             self._current_preset_name = name
@@ -154,9 +146,6 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
             return False
         
         try:
-            # 現在の状態を履歴に保存
-            self._save_parameter_state()
-            
             preset_data = self._presets[name]
             self.brightness_value = preset_data['brightness']
             self.contrast_value = preset_data['contrast']
@@ -174,14 +163,7 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         """利用可能な基本調整プリセット名のリストを取得"""
         return list(self._presets.keys())
     
-    def undo_basic_parameters(self) -> bool:
-        """基本調整パラメータを前の状態に戻す"""
-        if self._history_index > 0:
-            self._history_index -= 1
-            self._restore_parameter_state(self._parameter_history[self._history_index])
-            print("↶ 基本調整パラメータを前の状態に戻しました")
-            return True
-        return False
+
     
 
     
@@ -271,14 +253,14 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     def set_image(self, image: Image.Image):
         """処理対象画像をセット"""
         self.image = image
-        print(f"[DEBUG] set_image: self.image={type(self.image)}")
-        self._on_parameter_change()  # 画像セット時に即座にUI反映
+        print(f"[DEBUG] BasicAdjustmentPlugin.set_image: image設定完了")
 
     # --- コールバック設定（外部API） ---
 
     def set_update_image_callback(self, callback):
         """画像表示コールバックをセット"""
         self.update_image_callback = callback
+        print(f"[DEBUG] BasicAdjustmentPlugin.set_update_image_callback: callback設定完了")
 
     # --- UI生成・操作（外部API） ---
 
@@ -290,53 +272,41 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         """基本調整タブのUI生成（明るさ・コントラスト・彩度）"""
         print("[DEBUG] BasicAdjustmentPlugin.create_ui called")
         
-        # --- 明度調整（1行表示） ---
-        ctk.CTkLabel(parent, text="明度調整", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
-        row_brightness = ctk.CTkFrame(parent)
-        row_brightness.pack(side="top", fill="x", padx=5, pady=2)
-        label_brightness = ctk.CTkLabel(row_brightness, text="明度", font=("Arial", 11))
-        label_brightness.pack(side="left", padx=3)
-        self._sliders['brightness'], self._labels['brightness'] = PluginUIHelper.create_slider_with_label(
-            row_brightness,
-            text="明度",
+        # --- 明度調整（SmartSlider使用） ---
+        self._sliders['brightness'], self._labels['brightness'] = SmartSlider.create(
+            parent=parent,
+            text="明度調整",
             from_=-100,
             to=100,
             default_value=0,
-            command=self._on_brightness_change
+            command=self._on_brightness_change,
+            value_format="{:.0f}",
+            value_type=int
         )
-        self._labels['brightness'].pack(side="left", padx=6)
 
-        # --- コントラスト調整（1行表示） ---
-        ctk.CTkLabel(parent, text="コントラスト調整", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
-        row_contrast = ctk.CTkFrame(parent)
-        row_contrast.pack(side="top", fill="x", padx=5, pady=2)
-        label_contrast = ctk.CTkLabel(row_contrast, text="コントラスト", font=("Arial", 11))
-        label_contrast.pack(side="left", padx=3)
-        self._sliders['contrast'], self._labels['contrast'] = PluginUIHelper.create_slider_with_label(
-            row_contrast,
-            text="コントラスト",
+        # --- コントラスト調整（SmartSlider使用） ---
+        self._sliders['contrast'], self._labels['contrast'] = SmartSlider.create(
+            parent=parent,
+            text="コントラスト調整",
             from_=-100,
             to=100,
             default_value=0,
-            command=self._on_contrast_change
+            command=self._on_contrast_change,
+            value_format="{:.0f}",
+            value_type=int
         )
-        self._labels['contrast'].pack(side="left", padx=6)
 
-        # --- 彩度調整（1行表示） ---
-        ctk.CTkLabel(parent, text="彩度調整", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
-        row_saturation = ctk.CTkFrame(parent)
-        row_saturation.pack(side="top", fill="x", padx=5, pady=2)
-        label_saturation = ctk.CTkLabel(row_saturation, text="彩度", font=("Arial", 11))
-        label_saturation.pack(side="left", padx=3)
-        self._sliders['saturation'], self._labels['saturation'] = PluginUIHelper.create_slider_with_label(
-            row_saturation,
-            text="彩度",
+        # --- 彩度調整（SmartSlider使用） ---
+        self._sliders['saturation'], self._labels['saturation'] = SmartSlider.create(
+            parent=parent,
+            text="彩度調整",
             from_=-100,
             to=100,
             default_value=0,
-            command=self._on_saturation_change
+            command=self._on_saturation_change,
+            value_format="{:.0f}",
+            value_type=int
         )
-        self._labels['saturation'].pack(side="left", padx=6)
 
         # --- リセットボタン ---
         ctk.CTkLabel(parent, text="一括操作", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
@@ -351,13 +321,13 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         # --- Level 3: 基本調整プリセットUI ---
         preset_frame = ctk.CTkFrame(parent)
         preset_frame.pack(fill="x", padx=5, pady=5)
-        ctk.CTkLabel(preset_frame, text="基本調整プリセット (Level 3)", font=("Arial", 11, "bold")).pack(anchor="w", padx=3, pady=(5, 0))
+        ctk.CTkLabel(preset_frame, text="基本調整プリセット", font=("Arial", 11, "bold")).pack(anchor="w", padx=3, pady=(5, 0))
         
         # プリセット選択
         preset_select_frame = ctk.CTkFrame(preset_frame)
         preset_select_frame.pack(fill="x", padx=5, pady=2)
         
-        self._preset_var = ctk.StringVar(value="自然")
+        self._preset_var = ctk.StringVar(value="おまかせ調整")
         self._preset_menu = ctk.CTkOptionMenu(
             preset_select_frame,
             variable=self._preset_var,
@@ -371,66 +341,37 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         )
         self._buttons['load_preset'].pack(side="left", padx=2)
         
-        self._buttons['auto_adjust'] = PluginUIHelper.create_button(
-            preset_select_frame, text="🤖 自動", command=self._apply_auto_adjustment, width=60
-        )
-        self._buttons['auto_adjust'].pack(side="left", padx=2)
-        
-        # --- Level 3: 履歴管理UI ---
-        history_frame = ctk.CTkFrame(parent)
-        history_frame.pack(fill="x", padx=5, pady=2)
-        
-        history_controls = ctk.CTkFrame(history_frame)
-        history_controls.pack(fill="x", padx=5, pady=2)
-        
-        self._buttons['undo'] = PluginUIHelper.create_button(
-            history_controls, text="↶ Undo", command=self.undo_basic_parameters, width=80
-        )
-        self._buttons['undo'].pack(side="left", padx=2)
-        
-        self._buttons['redo'] = PluginUIHelper.create_button(
-            history_controls, text="↷ Redo", command=self.redo_basic_parameters, width=80
-        )
-        self._buttons['redo'].pack(side="left", padx=2)
-        
-        # 初期パラメータ状態を履歴に保存（Level 3）
-        self._save_parameter_state()
+
     
     # ===============================
     # 4. イベントハンドラー（コールバック）
     # ===============================
     
-    def _on_brightness_change(self, value: float) -> None:
-        """明度値変更時のコールバック"""
-        # UI更新中はコールバック処理をスキップ
+    def _on_brightness_change(self, value: int) -> None:
+        """明度値変更時のコールバック（SmartSlider対応）"""
         if getattr(self, '_updating_ui', False):
-            print("[DEBUG] UI更新中のため明度コールバックをスキップ")
             return
-            
-        self._brightness_value = self._clamp_value(int(value), -100, 100)
-        self._update_value_label('brightness', self._brightness_value)
+        
+        # SmartSliderでオーバーシュート対策・チャタリング防止済み
+        self.brightness_value = value
         self._on_parameter_change()
-    
-    def _on_contrast_change(self, value: float) -> None:
-        """コントラスト値変更時のコールバック"""
-        # UI更新中はコールバック処理をスキップ
+
+    def _on_contrast_change(self, value: int) -> None:
+        """コントラスト値変更時のコールバック（SmartSlider対応）"""
         if getattr(self, '_updating_ui', False):
-            print("[DEBUG] UI更新中のためコントラストコールバックをスキップ")
             return
-            
-        self._contrast_value = self._clamp_value(int(value), -100, 100)
-        self._update_value_label('contrast', self._contrast_value)
+        
+        # SmartSliderでオーバーシュート対策・チャタリング防止済み
+        self.contrast_value = value
         self._on_parameter_change()
-    
-    def _on_saturation_change(self, value: float) -> None:
-        """彩度値変更時のコールバック"""
-        # UI更新中はコールバック処理をスキップ
+
+    def _on_saturation_change(self, value: int) -> None:
+        """彩度値変更時のコールバック（SmartSlider対応）"""
         if getattr(self, '_updating_ui', False):
-            print("[DEBUG] UI更新中のため彩度コールバックをスキップ")
             return
-            
-        self._saturation_value = self._clamp_value(int(value), -100, 100)
-        self._update_value_label('saturation', self._saturation_value)
+        
+        # SmartSliderでオーバーシュート対策・チャタリング防止済み
+        self.saturation_value = value
         self._on_parameter_change()
 
     # ===============================
@@ -466,7 +407,8 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     @brightness_value.setter
     def brightness_value(self, value: int) -> None:
         """明度値設定（互換性維持用）"""
-        self._brightness_value = self._clamp_value(value, -100, 100)
+        clamped_value = self._clamp_value(int(round(value)), -100, 100)
+        self._brightness_value = clamped_value
     
     @property
     def contrast_value(self) -> int:
@@ -476,7 +418,8 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     @contrast_value.setter
     def contrast_value(self, value: int) -> None:
         """コントラスト値設定（互換性維持用）"""
-        self._contrast_value = self._clamp_value(value, -100, 100)
+        clamped_value = self._clamp_value(int(round(value)), -100, 100)
+        self._contrast_value = clamped_value
     
     @property
     def saturation_value(self) -> int:
@@ -486,7 +429,8 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     @saturation_value.setter
     def saturation_value(self, value: int) -> None:
         """彩度値設定（互換性維持用）"""
-        self._saturation_value = self._clamp_value(value, -100, 100)
+        clamped_value = self._clamp_value(int(round(value)), -100, 100)
+        self._saturation_value = clamped_value
     
     def process_image(self, image: Image.Image) -> Image.Image:
         """
@@ -522,12 +466,12 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
 
     def _apply_brightness_adjustment(self, image: Image.Image) -> Image.Image:
         """明度調整を適用"""
-        if self._brightness_value == 0:
+        if self.brightness_value == 0:  # プロパティを使用
             return image
         
         try:
-            brightness_factor = 1.0 + (self._brightness_value / 100.0)
-            brightness_factor = max(0.1, min(brightness_factor, 3.0))  # 制限値適用
+            brightness_factor = 1.0 + (self.brightness_value / 100.0)  # プロパティを使用
+            brightness_factor = max(0.1, min(brightness_factor, 3.0))
             enhancer = ImageEnhance.Brightness(image)
             return enhancer.enhance(brightness_factor)
         except Exception as e:
@@ -536,11 +480,11 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
 
     def _apply_contrast_adjustment(self, image: Image.Image) -> Image.Image:
         """コントラスト調整を適用"""
-        if self._contrast_value == 0:
+        if self.contrast_value == 0:  # プロパティを使用に修正
             return image
-        
+    
         try:
-            contrast_factor = 1.0 + (self._contrast_value / 100.0)
+            contrast_factor = 1.0 + (self.contrast_value / 100.0)  # プロパティを使用に修正
             contrast_factor = max(0.1, min(contrast_factor, 3.0))  # 制限値適用
             enhancer = ImageEnhance.Contrast(image)
             return enhancer.enhance(contrast_factor)
@@ -550,11 +494,11 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
 
     def _apply_saturation_adjustment(self, image: Image.Image) -> Image.Image:
         """彩度調整を適用"""
-        if self._saturation_value == 0:
+        if self.saturation_value == 0:  # プロパティを使用に修正
             return image
-        
+    
         try:
-            saturation_factor = 1.0 + (self._saturation_value / 100.0)
+            saturation_factor = 1.0 + (self.saturation_value / 100.0)  # プロパティを使用に修正
             saturation_factor = max(0.0, min(saturation_factor, 3.0))  # 制限値適用
             enhancer = ImageEnhance.Color(image)
             return enhancer.enhance(saturation_factor)
@@ -564,57 +508,31 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
     
     def reset_parameters(self) -> None:
         """パラメータをリセット"""
-        print("🔄 基本調整パラメータリセット")
-        
         try:
-            # 1. パラメータ値を0にリセット
+            # UI更新フラグを設定
+            self._updating_ui = True
+            
+            # パラメータ値を直接リセット
             self._brightness_value = 0
             self._contrast_value = 0
             self._saturation_value = 0
             
-            # 2. スライダーの値を強制的に設定（遅延実行でより確実に）
-            sliders_to_reset = []
+            # スライダーとラベルをリセット
             for param in ['brightness', 'contrast', 'saturation']:
-                if param in self._sliders:
-                    slider = self._sliders[param]
-                    sliders_to_reset.append((param, slider))
-                    print(f"[DEBUG] {param}スライダー現在値: {slider.get()}")
-                    
-                    # まず直接設定
-                    self._updating_ui = True
-                    slider.set(0)
+                if param in self._sliders and self._sliders[param]:
+                    self._sliders[param].set(0)
+                self._update_value_label(param, 0)
             
-            # 3. 遅延実行でスライダーを確実にリセット
-            def force_all_sliders_update():
-                try:
-                    for param, slider in sliders_to_reset:
-                        slider.set(0)
-                        if hasattr(slider, '_variable'):
-                            slider._variable.set(0)
-                        slider.update_idletasks()
-                        print(f"[DEBUG] 遅延更新後{param}スライダー値: {slider.get()}")
-                    self._updating_ui = False
-                    print("✅ 全スライダー遅延更新完了")
-                except Exception as e:
-                    print(f"[ERROR] 遅延更新エラー: {e}")
-                    self._updating_ui = False
+            # UI更新フラグを解除
+            self._updating_ui = False
             
-            # 次のUIイベントループで実行
-            if sliders_to_reset:
-                sliders_to_reset[0][1].after(1, force_all_sliders_update)
-            
-            # 4. ラベルも更新
-            self._update_value_label('brightness', 0)
-            self._update_value_label('contrast', 0)
-            self._update_value_label('saturation', 0)
-            
-            # 5. パラメータ変更を通知
+            # 画像更新
             self._on_parameter_change()
             print("✅ 基本調整パラメータリセット完了")
             
         except Exception as e:
             self._updating_ui = False
-            print(f"[ERROR] リセットエラー: {e}")
+            print(f"❌ リセットエラー: {e}")
     
     def get_parameters(self) -> Dict[str, Any]:
         """現在のパラメータを取得"""
@@ -626,47 +544,9 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
 
     # --- Level 3: 内部ヘルパーメソッド ---
     
-    def _get_timestamp(self) -> str:
-        """現在時刻のタイムスタンプを取得"""
-        from datetime import datetime
-        return datetime.now().strftime("%Y%m%d_%H%M%S")
+
     
-    def _save_parameter_state(self) -> None:
-        """現在のパラメータ状態を履歴に保存 (Level 3)"""
-        try:
-            if len(self._parameter_history) >= 10:  # max_history = 10
-                self._parameter_history.pop(0)
-            
-            state = {
-                'brightness': self.brightness_value,
-                'contrast': self.contrast_value,
-                'saturation': self.saturation_value,
-                'timestamp': self._get_timestamp()
-            }
-            self._parameter_history.append(state)
-            self._history_index = len(self._parameter_history) - 1
-            
-        except Exception as e:
-            if hasattr(self, '_logger'):
-                print(f"パラメータ状態保存エラー: {e}")
-            else:
-                print(f"パラメータ状態保存エラー: {e}")
-    
-    def _restore_parameter_state(self, state: dict) -> None:
-        """指定された状態からパラメータを復元 (Level 3)"""
-        try:
-            for param, value in state.items():
-                if param == 'brightness':
-                    self.brightness_value = value
-                elif param == 'contrast':
-                    self.contrast_value = value
-                elif param == 'saturation':
-                    self.saturation_value = value
-            
-            self._update_ui_from_parameters()
-            
-        except Exception as e:
-            print(f"パラメータ状態復元エラー: {e}")
+
     
     def _update_ui_from_parameters(self) -> None:
         """パラメータ値に基づいてUI要素を更新 (Level 3)"""
@@ -697,43 +577,105 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         """選択されたプリセットを適用 (Level 3)"""
         try:
             preset_name = self._preset_var.get()
-            preset_data = self.load_basic_preset(preset_name)
-            if preset_data:
-                print(f"プリセット '{preset_name}' を適用しました")
-                # 処理の通知（後でintegration可能）
-                    
+            if preset_name not in self._presets:
+                print(f"❌ プリセット '{preset_name}' が見つかりません")
+                return
+            
+            # おまかせ調整の場合は専用処理
+            if preset_name == 'おまかせ調整':
+                self._apply_auto_adjustment()
+                return
+            
+            # UI更新フラグを設定（コールバック干渉を防止）
+            self._updating_ui = True
+            
+            # プリセット値を取得
+            preset_data = self._presets[preset_name]
+            
+            # パラメータ値を更新
+            self.brightness_value = preset_data['brightness']
+            self.contrast_value = preset_data['contrast']  
+            self.saturation_value = preset_data['saturation']
+            
+            # スライダーとラベルを更新
+            if 'brightness' in self._sliders:
+                self._sliders['brightness'].set(preset_data['brightness'])
+                self._update_value_label('brightness', preset_data['brightness'])
+            if 'contrast' in self._sliders:
+                self._sliders['contrast'].set(preset_data['contrast'])
+                self._update_value_label('contrast', preset_data['contrast'])
+            if 'saturation' in self._sliders:
+                self._sliders['saturation'].set(preset_data['saturation'])
+                self._update_value_label('saturation', preset_data['saturation'])
+
+            # UI更新フラグを解除
+            self._updating_ui = False
+            
+            # 画像処理（画像とコールバックが設定されている場合のみ）
+            if self.image and self.update_image_callback:
+                self._on_parameter_change()
+            
+            print(f"✅ プリセット '{preset_name}' を適用しました")
+            
         except Exception as e:
-            print(f"プリセット適用エラー: {e}")
-    
+            self._updating_ui = False  # エラー時もフラグを確実に解除
+            print(f"❌ プリセット適用エラー: {e}")
+
     def _apply_auto_adjustment(self) -> None:
         """自動調整を適用 (Level 3)"""
         try:
-            # 現在は簡単な自動調整デモ実装
-            # 実際には画像解析に基づく調整値を計算
-            demo_adjustments = {'brightness': 10, 'contrast': 5, 'saturation': 0}
+            if self.image is None:
+                print("❌ 画像が読み込まれていません")
+                return
+                
+            # UI更新フラグを設定
+            self._updating_ui = True
             
-            for param, value in demo_adjustments.items():
-                if param == 'brightness':
-                    self.brightness_value = value
-                elif param == 'contrast':
-                    self.contrast_value = value
-                elif param == 'saturation':
-                    self.saturation_value = value
+            # 画像分析に基づく自動調整
+            suggestions = self.suggest_auto_adjustment(self.image)
+            if not suggestions:
+                print("❌ 自動調整の計算に失敗しました")
+                self._updating_ui = False
+                return
             
+            # 提案された値を適用
+            self.brightness_value = suggestions.get('brightness', 0)
+            self.contrast_value = suggestions.get('contrast', 0)
+            self.saturation_value = suggestions.get('saturation', 0)
+            
+            # UIを更新
             self._update_ui_from_parameters()
-            self._save_parameter_state()
-            print("自動調整を適用しました")
-                    
+            
+            # UI更新フラグを解除
+            self._updating_ui = False
+            
+            # 画像を更新
+            self._on_parameter_change()
+            
+            print(f"🤖 自動調整適用: {suggestions}")
+            
         except Exception as e:
-            print(f"自動調整エラー: {e}")
+            self._updating_ui = False  # エラー時もフラグを確実に解除
+            print(f"❌ 自動調整エラー: {e}")
+
+
     
-    def redo_basic_parameters(self) -> None:
-        """基本調整パラメータのRedo操作 (Level 3)"""
-        try:
-            if self._history_index < len(self._parameter_history) - 1:
-                self._history_index += 1
-                state = self._parameter_history[self._history_index]
-                self._restore_parameter_state(state)
-                print("基本調整パラメータをRedo")
-        except Exception as e:
-            print(f"Redoエラー: {e}")
+    def _on_parameter_change(self) -> None:
+        """パラメータ変更時の共通処理（チャタリング対策付き）"""
+        if not (self.image and self.update_image_callback):
+            return
+        
+        # 既存のタイマーをキャンセル
+        if self._update_timer:
+            self._update_timer.cancel()
+        
+        # 100ms後に画像処理を実行（チャタリング対策）
+        def delayed_update():
+            if self.image and self.update_image_callback:
+                processed_image = self.process_image(self.image)
+                self.update_image_callback(processed_image)
+            self._update_timer = None
+        
+        import threading
+        self._update_timer = threading.Timer(0.1, delayed_update)
+        self._update_timer.start()

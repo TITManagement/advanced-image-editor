@@ -9,6 +9,7 @@ import numpy as np
 import cv2
 from PIL import Image, ImageFilter
 import customtkinter as ctk
+import threading
 from typing import Dict, Any
 
 # 相対インポートでcore moduleを使用
@@ -17,6 +18,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
+from utils.smart_slider import SmartSlider
 
 
 class FilterProcessingPlugin(ImageProcessorPlugin):
@@ -63,12 +65,15 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self._buttons: Dict[str, ctk.CTkButton] = {}
         
         # --- コールバック関数 ---
+        self._parameter_change_callback = None
         self._special_filter_callback = None
         self._morphology_callback = None
         self._contour_callback = None
         self._undo_special_filter_callback = None
         self._undo_morphology_callback = None
         self._undo_contour_callback = None
+        
+
         
     def get_display_name(self) -> str:
         """プラグインの表示名を取得"""
@@ -81,6 +86,10 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     # ===============================
     # 2. コールバック設定（外部API）
     # ===============================
+    
+    def set_parameter_change_callback(self, callback):
+        """パラメータ変更用のコールバックを設定"""
+        self._parameter_change_callback = callback
     
     def set_special_filter_callback(self, callback):
         """特殊フィルター用のコールバックを設定"""
@@ -113,26 +122,28 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     def create_ui(self, parent: ctk.CTkFrame) -> None:
         """フィルター処理UIを作成"""
         
-        # ブラー強度
-        self._sliders['blur'], self._labels['blur'] = PluginUIHelper.create_slider_with_label(
+        # ブラー強度（SmartSlider使用）
+        self._sliders['blur'], self._labels['blur'] = SmartSlider.create(
             parent=parent,
             text="ガウシアンブラー",
             from_=0,
             to=20,
             default_value=0,
             command=self._on_blur_change,
-            value_format="{:.0f}"
+            value_format="{:.0f}",
+            value_type=int
         )
         
-        # シャープニング強度
-        self._sliders['sharpen'], self._labels['sharpen'] = PluginUIHelper.create_slider_with_label(
+        # シャープニング強度（SmartSlider使用）
+        self._sliders['sharpen'], self._labels['sharpen'] = SmartSlider.create(
             parent=parent,
             text="シャープニング",
             from_=0,
             to=10,
             default_value=0,
             command=self._on_sharpen_change,
-            value_format="{:.1f}"
+            value_format="{:.1f}",
+            value_type=float
         )
         
         # フィルターボタン群
@@ -210,15 +221,16 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         
         ctk.CTkLabel(morph_frame, text="モルフォロジー演算", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
         
-        # カーネルサイズ
-        self._sliders['kernel'], self._labels['kernel'] = PluginUIHelper.create_slider_with_label(
+        # カーネルサイズ（SmartSlider使用）
+        self._sliders['kernel'], self._labels['kernel'] = SmartSlider.create(
             parent=morph_frame,
             text="カーネルサイズ",
             from_=3,
             to=15,
             default_value=5,
             command=self._on_kernel_change,
-            value_format="{:.0f}"
+            value_format="{:.0f}",
+            value_type=int
         )
         
         # モルフォロジー演算ボタン群
@@ -305,24 +317,29 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     # 5. イベントハンドラー（コールバック）
     # ===============================
     
+    def _on_parameter_change(self):
+        """パラメータ変更時の共通処理"""
+        # フィルタープラグインでは、parameter_change_callbackを呼び出して
+        # 全体の画像処理パイプラインを実行する
+        if hasattr(self, '_parameter_change_callback') and self._parameter_change_callback:
+            self._parameter_change_callback()
+    
     def _on_blur_change(self, value: float) -> None:
         """ブラー強度変更時のコールバック"""
-        self._blur_strength = self._clamp_value(int(value), 0, 20)
-        self._update_value_label('blur', self._blur_strength)
+        self._blur_strength = int(round(value))
         self._on_parameter_change()
     
     def _on_sharpen_change(self, value: float) -> None:
         """シャープニング強度変更時のコールバック"""
-        self._sharpen_strength = self._clamp_value(float(value), 0.0, 10.0)
-        self._update_value_label('sharpen', self._sharpen_strength)
+        self._sharpen_strength = float(round(value, 1))
         self._on_parameter_change()
     
     def _on_kernel_change(self, value: float) -> None:
         """カーネルサイズ変更時のコールバック"""
-        kernel_size = self._clamp_value(int(value), 3, 15)
+        kernel_size = int(round(value))
         # 奇数にする
         self._morph_kernel_size = kernel_size if kernel_size % 2 == 1 else kernel_size + 1
-        self._update_value_label('kernel', self._morph_kernel_size)
+        self._on_parameter_change()
 
     # ===============================
     # 6. アクション・リセット処理
@@ -649,30 +666,37 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
 
     def reset_parameters(self) -> None:
         """全パラメータをリセット"""
-        self._blur_strength = 0
-        self._sharpen_strength = 0.0
-        self._current_filter = "none"
-        self._morph_kernel_size = 5
-        
-        # 機能状態をリセット
-        self._applied_special_filter = None
-        self._applied_morphology = None
-        self._applied_contour = False
-        
-        # UIの更新
-        if 'blur' in self._sliders:
-            self._sliders['blur'].set(0)
-            self._update_value_label('blur', 0)
-        if 'sharpen' in self._sliders:
-            self._sliders['sharpen'].set(0.0)
-            self._update_value_label('sharpen', 0.0)
-        if 'kernel' in self._sliders:
-            self._sliders['kernel'].set(5)
-            self._update_value_label('kernel', 5)
-        
-        # undoボタンを無効化
-        for button_name in ['undo_denoise', 'undo_emboss', 'undo_edge', 'undo_morphology', 'undo_contour']:
-            self._disable_undo_button(button_name)
+        try:
+            # パラメータ値をリセット
+            self._blur_strength = 0
+            self._sharpen_strength = 0.0
+            self._current_filter = "none"
+            self._morph_kernel_size = 5
+            
+            # 機能状態をリセット
+            self._applied_special_filter = None
+            self._applied_morphology = None
+            self._applied_contour = False
+            
+            # スライダーとラベルをリセット（安全性チェック付き）
+            if 'blur' in self._sliders and self._sliders['blur']:
+                self._sliders['blur'].set(0)
+                self._update_value_label('blur', 0)
+            if 'sharpen' in self._sliders and self._sliders['sharpen']:
+                self._sliders['sharpen'].set(0.0)
+                self._update_value_label('sharpen', 0.0)
+            if 'kernel' in self._sliders and self._sliders['kernel']:
+                self._sliders['kernel'].set(5)
+                self._update_value_label('kernel', 5)
+            
+            # undoボタンを無効化
+            for button_name in ['undo_denoise', 'undo_emboss', 'undo_edge', 'undo_morphology', 'undo_contour']:
+                self._disable_undo_button(button_name)
+                
+            print("✅ フィルター処理パラメータリセット完了")
+            
+        except Exception as e:
+            print(f"❌ フィルターリセットエラー: {e}")
         
         self._on_parameter_change()
 
@@ -680,10 +704,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     # 7. 内部ヘルパーメソッド（プライベート）
     # ===============================
     
-    def _clamp_value(self, value, min_val, max_val):
-        """値を指定範囲内に制限"""
-        return max(min_val, min(value, max_val))
-    
+
     def _update_value_label(self, parameter: str, value) -> None:
         """値ラベルの更新"""
         if parameter in self._labels:

@@ -199,12 +199,31 @@ class ImageAnalysisPlugin(ImageProcessorPlugin):
             print(f"📈 周波数解析開始: {analysis_type}")
             img_gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
             if analysis_type == 'dct':
-                # DCT
+                # DCT - OpenCVのDCTは偶数サイズのみ対応のため、必要に応じてパディング
                 img_float = np.float32(img_gray) / 255.0
+                original_shape = img_float.shape
+                print(f"🔍 画像サイズ: {original_shape}")
+                
+                # 奇数サイズの場合、偶数サイズにパディング
+                h, w = img_float.shape
+                new_h = h if h % 2 == 0 else h + 1
+                new_w = w if w % 2 == 0 else w + 1
+                
+                if new_h != h or new_w != w:
+                    print(f"🔧 奇数サイズを検出、パディング: {(h, w)} → {(new_h, new_w)}")
+                    padded_img = np.zeros((new_h, new_w), dtype=np.float32)
+                    padded_img[:h, :w] = img_float
+                    img_float = padded_img
+                
                 dct = cv2.dct(img_float)
                 dct_log = np.log(np.abs(dct) + 1e-5)
                 dct_norm = cv2.normalize(dct_log, None, 0, 255, cv2.NORM_MINMAX)
                 dct_img = np.uint8(dct_norm)
+                
+                # 元のサイズに戻す
+                if new_h != original_shape[0] or new_w != original_shape[1]:
+                    dct_img = dct_img[:original_shape[0], :original_shape[1]]
+                
                 result = cv2.cvtColor(dct_img, cv2.COLOR_GRAY2RGB)
                 print("✅ DCT解析完了")
                 return Image.fromarray(result)

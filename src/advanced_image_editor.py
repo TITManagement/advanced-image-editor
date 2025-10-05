@@ -173,10 +173,7 @@ class AdvancedImageEditor(ctk.CTk):
         # self.plugin_instancesはsetup_pluginsで作成する
         if hasattr(self, 'plugin_instances'):
             # 基本調整 (create_plugin_tabsで既にsetup_ui経由で作成済み)
-            # 濃度調整
-            if 'density_adjustment' in self.plugin_instances:
-                print('[LOG] 濃度調整タブのUI部品表示トリガ: create_ui を呼び出します')
-                self.plugin_instances['density_adjustment'].create_ui(self.plugin_frames['density_adjustment'])
+            # 濃度調整 (create_plugin_tabsで既にsetup_ui経由で作成済み)
             # フィルター
             if 'filter_processing' in self.plugin_instances:
                 self.plugin_instances['filter_processing'].create_ui(self.plugin_frames['filter_processing'])
@@ -467,14 +464,26 @@ class AdvancedImageEditor(ctk.CTk):
         """画像読み込み完了時の処理"""
         info_print("新しい画像読み込み: 全プラグインを初期化中...")
         self.reset_all_plugins()
-        # 画像解析プラグインに画像をセット
-        image_analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
-        density_plugin = self.plugin_manager.get_plugin('density_adjustment')
+        # 全プラグインに画像をセット
         current_image = self.image_editor.get_current_image()
-        if image_analysis_plugin and current_image:
-            image_analysis_plugin.set_image(current_image)
-        if density_plugin and current_image:
-            density_plugin.set_image(current_image)
+        if current_image:
+            # 基本調整プラグインに画像をセット
+            basic_plugin = self.plugin_manager.get_plugin('basic_adjustment')
+            if basic_plugin and hasattr(basic_plugin, 'set_image'):
+                basic_plugin.set_image(current_image)
+                if hasattr(basic_plugin, 'set_update_image_callback'):
+                    basic_plugin.set_update_image_callback(self.image_editor.update_current_image)
+                debug_print("基本調整プラグインに画像・コールバック設定完了")
+            
+            # 画像解析プラグインに画像をセット
+            image_analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
+            if image_analysis_plugin and hasattr(image_analysis_plugin, 'set_image'):
+                image_analysis_plugin.set_image(current_image)
+            
+            # 濃度調整プラグインに画像をセット
+            density_plugin = self.plugin_manager.get_plugin('density_adjustment')
+            if density_plugin and hasattr(density_plugin, 'set_image'):
+                density_plugin.set_image(current_image)
         debug_print("全プラグイン初期化完了")
     
     def apply_all_adjustments(self):
