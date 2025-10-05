@@ -143,7 +143,8 @@ class SmartSlider:
         command: Optional[Callable] = None,
         value_format: str = "{:.0f}",
         debounce_delay: float = 0.1,
-        value_type: type = int
+        value_type: type = int,
+        horizontal_layout: bool = False
     ) -> Tuple[ctk.CTkSlider, ctk.CTkLabel]:
         """
         スマートスライダーを作成（PluginUIHelper.create_slider_with_label互換）
@@ -158,27 +159,54 @@ class SmartSlider:
             value_format: 値の表示フォーマット
             debounce_delay: デバウンス遅延時間（秒）
             value_type: 値の型（int または float）
+            horizontal_layout: 1行レイアウトの場合True
             
         Returns:
             (スライダー, 値ラベル)のタプル（既存コードとの互換性）
         """
-        # ラベル
-        label = ctk.CTkLabel(parent, text=text, font=("Arial", 11))
-        label.pack(anchor="w", padx=3, pady=(5, 0))
+        if horizontal_layout:
+            # 1行レイアウト（水平配置）
+            slider_frame = ctk.CTkFrame(parent)
+            slider_frame.pack(fill="x", padx=5, pady=2)
+            
+            # ラベル（左側、固定幅）
+            label = ctk.CTkLabel(slider_frame, text=text, font=("Arial", 11), width=120)
+            label.pack(side="left", padx=(5, 10))
+            
+            # スライダー（中央、伸縮）
+            slider = ctk.CTkSlider(
+                slider_frame,
+                from_=from_,
+                to=to,
+                width=180,
+                height=20
+            )
+            slider.pack(side="left", fill="x", expand=True, padx=(0, 10))
+            
+            # 値表示ラベル（右側、固定幅）
+            value_label = ctk.CTkLabel(slider_frame, text=value_format.format(default_value), font=("Arial", 9), width=40)
+            value_label.pack(side="right", padx=(0, 5))
+            
+        else:
+            # 従来の縦レイアウト
+            # ラベル
+            label = ctk.CTkLabel(parent, text=text, font=("Arial", 11))
+            label.pack(anchor="w", padx=3, pady=(5, 0))
+            
+            # 値表示ラベル
+            value_label = ctk.CTkLabel(parent, text=value_format.format(default_value), font=("Arial", 9))
+            value_label.pack(anchor="w", padx=3)
+            
+            # スライダー
+            slider = ctk.CTkSlider(
+                parent,
+                from_=from_,
+                to=to,
+                width=250,
+                height=20
+            )
+            slider.pack(fill="x", padx=10, pady=(2, 8))
         
-        # 値表示ラベル
-        value_label = ctk.CTkLabel(parent, text=value_format.format(default_value), font=("Arial", 9))
-        value_label.pack(anchor="w", padx=3)
-        
-        # スライダー
-        slider = ctk.CTkSlider(
-            parent,
-            from_=int(from_) if isinstance(from_, float) and from_.is_integer() else from_,
-            to=int(to) if isinstance(to, float) and to.is_integer() else to,
-            width=250,
-            height=20
-        )
-        slider.pack(fill="x", padx=10, pady=(2, 8))
         slider.set(default_value)
         
         # SmartSliderインスタンスを作成（内部でオーバーシュート対策・チャタリング防止を処理）

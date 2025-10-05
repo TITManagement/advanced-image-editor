@@ -1,0 +1,40 @@
+{
+  "display_name": "基本調整（新版）",
+  "description": "明度、コントラスト、彩度の基本的な画像調整（革新版）",
+  "parameters": [
+    {
+      "name": "brightness",
+      "label": "明度調整",
+      "min": -100,
+      "max": 100,
+      "default": 0,
+      "type": "int",
+      "format": "{:.0f}"
+    },
+    {
+      "name": "contrast",
+      "label": "コントラスト調整",
+      "min": -100,
+      "max": 100,
+      "default": 0,
+      "type": "int",
+      "format": "{:.0f}"
+    },
+    {
+      "name": "saturation",
+      "label": "彩度調整",
+      "min": -100,
+      "max": 100,
+      "default": 0,
+      "type": "int",
+      "format": "{:.0f}"
+    }
+  ],
+  "presets": {
+    "自然": {"brightness": 0, "contrast": 0, "saturation": 0},
+    "鮮やか": {"brightness": 10, "contrast": 15, "saturation": 20},
+    "モノクロ風": {"brightness": -5, "contrast": 25, "saturation": -80},
+    "ソフト": {"brightness": 5, "contrast": -10, "saturation": -15},
+    "ビビッド": {"brightness": 0, "contrast": 30, "saturation": 40}
+  }
+}

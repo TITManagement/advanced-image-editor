@@ -1,0 +1,86 @@
+{
+  "name": "filters",
+  "display_name": "フィルター処理",
+  "description": "ガウシアンブラー、シャープニング、特殊フィルター、モルフォロジー演算、輪郭検出を提供",
+  "version": "1.0.0",
+  "plugin_type": "filters",
+  "parameters": {
+    "blur_strength": {
+      "label": "ガウシアンブラー",
+      "type": "int",
+      "range": [0, 20],
+      "default": 0,
+      "format": "{:.0f}"
+    },
+    "sharpen_strength": {
+      "label": "シャープニング",
+      "type": "float",
+      "range": [0, 10],
+      "default": 0,
+      "format": "{:.1f}"
+    },
+    "morph_kernel_size": {
+      "label": "カーネルサイズ",
+      "type": "int",
+      "range": [3, 15],
+      "default": 5,
+      "format": "{:.0f}"
+    }
+  },
+  "special_buttons": {
+    "denoise": {
+      "display_name": "ノイズ除去",
+      "category": "特殊フィルター"
+    },
+    "emboss": {
+      "display_name": "エンボス",
+      "category": "特殊フィルター"
+    },
+    "edge": {
+      "display_name": "エッジ検出",
+      "category": "特殊フィルター"
+    },
+    "erosion": {
+      "display_name": "侵食",
+      "category": "モルフォロジー演算"
+    },
+    "dilation": {
+      "display_name": "膨張",
+      "category": "モルフォロジー演算"
+    },
+    "opening": {
+      "display_name": "開放",
+      "category": "モルフォロジー演算"
+    },
+    "closing": {
+      "display_name": "閉鎖",
+      "category": "モルフォロジー演算"
+    },
+    "contour": {
+      "display_name": "輪郭検出",
+      "category": "輪郭処理"
+    }
+  },
+  "presets": {
+    "自然": {
+      "blur_strength": 0,
+      "sharpen_strength": 0,
+      "morph_kernel_size": 5
+    },
+    "ソフト": {
+      "blur_strength": 3,
+      "sharpen_strength": 0,
+      "morph_kernel_size": 5
+    },
+    "シャープ": {
+      "blur_strength": 0,
+      "sharpen_strength": 5,
+      "morph_kernel_size": 5
+    },
+    "クリア": {
+      "blur_strength": 1,
+      "sharpen_strength": 3,
+      "morph_kernel_size": 5
+    }
+  }
+}

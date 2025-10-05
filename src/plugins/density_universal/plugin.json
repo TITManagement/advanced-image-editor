@@ -1,0 +1,72 @@
+{
+    "plugin_id": "density_adjustment_universal",
+    "display_name": "濃度調整",
+    "version": "2.0.0",
+    "description": "ガンマ補正、シャドウ/ハイライト調整、色温度調整",
+    "plugin_type": "density",
+    "curve_editor": true,
+    "parameters": {
+        "shadow": {
+            "type": "int",
+            "range": [-100, 100],
+            "default": 0,
+            "label": "シャドウ",
+            "format": "{:.0f}",
+            "description": "暗部の明度を調整"
+        },
+        "highlight": {
+            "type": "int", 
+            "range": [-100, 100],
+            "default": 0,
+            "label": "ハイライト",
+            "format": "{:.0f}",
+            "description": "明部の明度を調整"
+        },
+        "temperature": {
+            "type": "int",
+            "range": [-100, 100], 
+            "default": 0,
+            "label": "色温度",
+            "format": "{:.0f}",
+            "description": "画像の色温度を調整"
+        },
+        "threshold": {
+            "type": "int",
+            "range": [0, 255],
+            "default": 127,
+            "label": "2値化調整",
+            "format": "{:.0f}",
+            "description": "2値化の閾値を設定"
+        }
+    },
+    "presets": {
+        "自然": {
+            "gamma": 1.0,
+            "shadow": 0,
+            "highlight": 0,
+            "temperature": 0,
+            "description": "自然な仕上がり"
+        },
+        "明るく": {
+            "gamma": 0.8,
+            "shadow": 15,
+            "highlight": -10,
+            "temperature": 5,
+            "description": "全体的に明るく"
+        },
+        "暗く": {
+            "gamma": 1.3,
+            "shadow": -15,
+            "highlight": 10,
+            "temperature": -5,
+            "description": "全体的に暗く"
+        },
+        "ドラマチック": {
+            "gamma": 1.1,
+            "shadow": -30,
+            "highlight": -20,
+            "temperature": -10,
+            "description": "コントラストの強い仕上がり"
+        }
+    }
+}

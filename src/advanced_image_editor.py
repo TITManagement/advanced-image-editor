@@ -86,6 +86,11 @@ try:
     from plugins.density import DensityAdjustmentPlugin
     from plugins.filters import FilterProcessingPlugin
     from plugins.analysis import ImageAnalysisPlugin
+    # テスト用: Universal版プラグインを追加
+    from plugins.basic_universal.plugin import BasicAdjustmentUniversalPlugin
+    from plugins.filters_universal.plugin import UniversalFiltersPlugin
+    from plugins.analysis_universal.plugin import UniversalAnalysisPlugin
+    from plugins.density_universal.plugin import DensityAdjustmentUniversalPlugin
     from plugins.analysis.histogram_analysis_plugin import HistogramAnalysisPlugin
     print("✅ プラグインシステムのインポートが完了しました")
 except ImportError as e:
@@ -159,12 +164,27 @@ class AdvancedImageEditor(ctk.CTk):
         self.ui.setup_control_buttons(callbacks)
     
     def setup_plugin_tabs(self):
-        """プラグイン用のタブビューをセットアップ（各タブにUI部品を生成）"""
+        """
+        ユーザー表示用のタブビューをセットアップ
+        
+        注意: ここで定義されるのは「実際に表示されるUIタブ」のみです。
+        プラグイン登録（setup_plugins）とは別概念で、全プラグインが
+        独立タブを持つわけではありません。
+        
+        独立タブ型: 各プラグインが専用のUIタブを持つ
+        共有サービス型: 他プラグインから呼び出される（独立タブなし）
+        """
+        # 実際にユーザーが見るタブのみを定義（8個）
         plugin_tabs = {
-            "basic_adjustment": "🎯 基本調整",
-            "density_adjustment": "🌈 濃度調整", 
+            "basic": "🆕 Universal基本調整",
+            # "basic_adjustment": "🎯 基本調整",
+            "density": "🔥 Universal濃度調整", 
+            # "density_adjustment": "🌈 濃度調整", 
+            "filters": "🌟 Universalフィルター",
             "filter_processing": "🌀 フィルター",
-            "image_analysis": "🔬 画像解析"
+            "analysis": "🔬 Universal画像解析",
+            "image_analysis": "� 画像解析"
+            # 注意: histogram_analysis は共有サービス型のため独立タブなし
         }
         self.plugin_frames = self.ui.setup_plugin_tabs(plugin_tabs)
 
@@ -181,12 +201,38 @@ class AdvancedImageEditor(ctk.CTk):
     
 
     def setup_plugins(self):
-        """プラグインを登録・初期化（UI生成→コールバック登録・検証の順に分離）"""
+        """
+        システム内部プラグインの登録・初期化
+        
+        注意: ここで登録されるのは「システム内部で管理される全プラグイン」です。
+        UIタブ表示（setup_plugin_tabs）とは別概念で、一部のプラグインは
+        独立したUIタブを持たない場合があります。
+        
+        独立タブ型: UIタブとプラグインが1:1対応
+        共有サービス型: 他プラグインから呼び出される補助機能（例: histogram_analysis）
+        並行表示型: 新旧バージョンの比較検証用（例: basic vs basic_adjustment）
+        """
         info_print("プラグインを登録中...")
         plugin_configs = [
+            # テスト用: Universal版を基本調整の左に配置
+            {
+                'name': 'basic',
+                'class': BasicAdjustmentUniversalPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
+                }
+            },
             {
                 'name': 'basic_adjustment',
                 'class': BasicAdjustmentPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
+                }
+            },
+            # テスト用: Universal版濃度調整を並行して追加  
+            {
+                'name': 'density',
+                'class': DensityAdjustmentUniversalPlugin,
                 'callbacks': {
                     'parameter_change': self.on_plugin_parameter_change,
                 }
@@ -198,6 +244,22 @@ class AdvancedImageEditor(ctk.CTk):
                     'parameter_change': self.on_plugin_parameter_change,
                     'histogram': self.apply_histogram_equalization,
                     'threshold': self.apply_binary_threshold,
+                }
+            },
+            # テスト用: Universal版フィルターを並行して追加
+            {
+                'name': 'filters',
+                'class': UniversalFiltersPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
+                }
+            },
+            # テスト用: Universal版画像解析を並行して追加
+            {
+                'name': 'analysis',
+                'class': UniversalAnalysisPlugin,
+                'callbacks': {
+                    'parameter_change': self.on_plugin_parameter_change,
                 }
             },
             {
@@ -475,6 +537,14 @@ class AdvancedImageEditor(ctk.CTk):
                     basic_plugin.set_update_image_callback(self.image_editor.update_current_image)
                 debug_print("基本調整プラグインに画像・コールバック設定完了")
             
+            # Universal基本調整プラグインにも画像をセット
+            universal_basic_plugin = self.plugin_manager.get_plugin('basic')
+            if universal_basic_plugin and hasattr(universal_basic_plugin, 'set_image'):
+                universal_basic_plugin.set_image(current_image)
+                if hasattr(universal_basic_plugin, 'set_update_image_callback'):
+                    universal_basic_plugin.set_update_image_callback(self.image_editor.update_current_image)
+                debug_print("Universal基本調整プラグインに画像・コールバック設定完了")
+            
             # 画像解析プラグインに画像をセット
             image_analysis_plugin = self.plugin_manager.get_plugin('image_analysis')
             if image_analysis_plugin and hasattr(image_analysis_plugin, 'set_image'):
@@ -484,6 +554,30 @@ class AdvancedImageEditor(ctk.CTk):
             density_plugin = self.plugin_manager.get_plugin('density_adjustment')
             if density_plugin and hasattr(density_plugin, 'set_image'):
                 density_plugin.set_image(current_image)
+            
+            # Universal濃度調整プラグインにも画像・コールバックをセット
+            universal_density_plugin = self.plugin_manager.get_plugin('density')
+            if universal_density_plugin and hasattr(universal_density_plugin, 'set_image'):
+                universal_density_plugin.set_image(current_image)
+                if hasattr(universal_density_plugin, 'set_update_image_callback'):
+                    universal_density_plugin.set_update_image_callback(self.image_editor.update_current_image)
+                debug_print("Universal濃度調整プラグインに画像・コールバック設定完了")
+            
+            # Universal Analysis プラグインに画像をセット
+            universal_analysis_plugin = self.plugin_manager.get_plugin('analysis')
+            if universal_analysis_plugin and hasattr(universal_analysis_plugin, 'set_image'):
+                universal_analysis_plugin.set_image(current_image)
+                if hasattr(universal_analysis_plugin, 'set_update_image_callback'):
+                    universal_analysis_plugin.set_update_image_callback(self.image_editor.update_current_image)
+                debug_print("Universal Analysis プラグインに画像・コールバック設定完了")
+            
+            # Universal Filters プラグインに画像をセット
+            universal_filters_plugin = self.plugin_manager.get_plugin('filters')
+            if universal_filters_plugin and hasattr(universal_filters_plugin, 'set_image'):
+                universal_filters_plugin.set_image(current_image)
+                if hasattr(universal_filters_plugin, 'set_update_image_callback'):
+                    universal_filters_plugin.set_update_image_callback(self.image_editor.update_current_image)
+                debug_print("Universal Filters プラグインに画像・コールバック設定完了")
         debug_print("全プラグイン初期化完了")
     
     def apply_all_adjustments(self):
