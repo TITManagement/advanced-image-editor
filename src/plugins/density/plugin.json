@@ -1,0 +1,9 @@
+{
+  "plugin_id": "density_adjustment",
+  "module": "plugins.density.density_plugin",
+  "class": "DensityAdjustmentPlugin",
+  "display_name": "濃度調整",
+  "description": "ガンマ補正、シャドウ/ハイライト、色温度、二値化などの濃度調整機能を提供します。",
+  "version": "1.0.0",
+  "category": "adjustment"
+}

@@ -10,15 +10,15 @@ import cv2
 from PIL import Image, ImageFilter
 import customtkinter as ctk
 import threading
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # 相対インポートでcore moduleを使用
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
-from utils.smart_slider import SmartSlider
+from core.plugin_base import ImageProcessorPlugin
+from .presenter import FilterProcessingPresenter
 
 
 class FilterProcessingPlugin(ImageProcessorPlugin):
@@ -60,9 +60,13 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self._applied_contour = False
         
         # --- UI要素辞書 ---
-        self._sliders: Dict[str, ctk.CTkSlider] = {}
-        self._labels: Dict[str, ctk.CTkLabel] = {}
-        self._buttons: Dict[str, ctk.CTkButton] = {}
+        self._sliders: Dict[str, Any] = {}
+        self._labels: Dict[str, Any] = {}
+        self._buttons: Dict[str, Any] = {}
+        self._pending_button_states: Dict[str, str] = {}
+        
+        # Presenter
+        self.presenter: Optional[FilterProcessingPresenter] = None
         
         # --- コールバック関数 ---
         self._parameter_change_callback = None
@@ -118,11 +122,24 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     # ===============================
     # 3. UI生成・操作（外部API）
     # ===============================
+
+    def setup_ui(self, parent) -> None:
+        if self.presenter is None:
+            self.presenter = FilterProcessingPresenter(self)
+        self.presenter.build(parent)
+
+    def attach_ui(self, sliders: Dict[str, Any], labels: Dict[str, Any], buttons: Dict[str, Any]) -> None:
+        self._sliders = sliders
+        self._labels = labels
+        self._buttons = buttons
+        self._apply_pending_button_states()
     
-    def create_ui(self, parent: ctk.CTkFrame) -> None:
-        """フィルター処理UIを作成"""
-        
-        # ブラー強度（SmartSlider使用）
+    def create_ui(self, parent) -> None:
+        """古い呼び出し互換: Presenter 経由で UI を構築"""
+        self.setup_ui(parent)
+        return
+
+        # 以下は旧UI実装（互換用に残すが未使用）
         self._sliders['blur'], self._labels['blur'] = SmartSlider.create(
             parent=parent,
             text="ガウシアンブラー",
@@ -381,17 +398,63 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     
     def _enable_undo_button(self, button_name: str) -> None:
         """undoボタンを有効化"""
-        if button_name in self._buttons:
-            self._buttons[button_name].configure(state="normal")
+        self._set_button_state(button_name, ctk.NORMAL)
     
     def _disable_undo_button(self, button_name: str) -> None:
         """undoボタンを無効化"""
-        if button_name in self._buttons:
-            self._buttons[button_name].configure(state="disabled")
+        self._set_button_state(button_name, ctk.DISABLED)
+    
+    def _get_button(self, button_name: str):
+        """ボタン参照を解決"""
+        button = self._buttons.get(button_name)
+        if not button and self.presenter is not None:
+            presenter_button = self.presenter.buttons.get(button_name)
+            if presenter_button:
+                self._buttons[button_name] = presenter_button
+                button = presenter_button
+        return button
+
+    def _set_button_state(self, button_name: str, desired_state: str) -> None:
+        """指定したundoボタンの状態を設定。未生成の場合は保留"""
+        # Presenter経由の更新を優先して適用
+        if self.presenter:
+            try:
+                updated = self.presenter.set_button_state(button_name, desired_state)
+            except Exception as exc:
+                print(f"[DEBUG] presenter経由のボタン状態更新失敗: {button_name} -> {desired_state}, error={exc}")
+                updated = False
+            if updated:
+                self._pending_button_states.pop(button_name, None)
+                return
+
+        button = self._get_button(button_name)
+        if not button:
+            self._pending_button_states[button_name] = desired_state
+            print(f"[DEBUG] undoボタン未接続のため状態を保留: {button_name} -> {desired_state}")
+            return
+        
+        try:
+            before_state = getattr(button, "cget", lambda x: None)("state")
+            button.configure(state=desired_state)
+            after_state = getattr(button, "cget", lambda x: None)("state")
+            print(f"[DEBUG] undoボタン状態更新: {button_name} {before_state} -> {after_state}, widget={button}")
+        except Exception as exc:
+            print(f"[DEBUG] undoボタン状態更新失敗: {button_name} -> {desired_state}, error={exc}")
+            return
+        finally:
+            self._pending_button_states.pop(button_name, None)
+
+    def _apply_pending_button_states(self) -> None:
+        """未適用のボタン状態を適用"""
+        if not self._pending_button_states:
+            return
+        pending = dict(self._pending_button_states)
+        for button_name, desired_state in pending.items():
+            self._set_button_state(button_name, desired_state)
     
     def _undo_special_filter(self, filter_type: str) -> None:
         """特殊フィルターのundo"""
-        print(f"🔄 特殊フィルター取消: {filter_type}")
+        print(f"🔄 特殊フィルター取消ボタン押下: {filter_type}")
         
         # 状態をリセット
         self._applied_special_filter = None
@@ -406,7 +469,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     
     def _undo_morphology(self) -> None:
         """モルフォロジー演算のundo"""
-        print(f"🔄 モルフォロジー演算取消")
+        print(f"🔄 モルフォロジー取消ボタン押下")
         
         # 状態をリセット
         self._applied_morphology = None
@@ -420,7 +483,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     
     def _undo_contour(self) -> None:
         """輪郭検出のundo"""
-        print(f"🔄 輪郭検出取消")
+        print(f"🔄 輪郭取消ボタン押下")
         
         # 状態をリセット
         self._applied_contour = False
@@ -569,6 +632,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             else:
                 result_image = image
             
+            self._enable_undo_button(f"undo_{filter_type}")
             print(f"✅ 特殊フィルター完了: {filter_type}")
             return result_image
             
@@ -605,6 +669,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             result_image = Image.fromarray(result_rgb)
             
             print(f"✅ モルフォロジー演算完了: {operation}")
+            self._enable_undo_button("undo_morphology")
             return result_image
             
         except Exception as e:
@@ -649,6 +714,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             final_image = Image.fromarray(result_rgb)
             
             print(f"✅ 輪郭検出完了: {len(contours)}個の輪郭を検出 ({len(filtered_contours)}個を描画)")
+            self._enable_undo_button("undo_contour")
             return final_image
             
         except Exception as e:

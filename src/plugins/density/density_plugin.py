@@ -9,15 +9,15 @@ import numpy as np
 import cv2
 from PIL import Image
 import customtkinter as ctk
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 
 # 相対インポートでcore moduleを使用
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
-from utils.smart_slider import SmartSlider
+from core.plugin_base import ImageProcessorPlugin
+from .presenter import DensityAdjustmentPresenter
 
 # カーブエディタのインポート
 try:
@@ -72,6 +72,8 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         # カーブエディタ用
         self.use_curve_gamma = False
         self.gamma_lut = None
+        self.binary_backup = None
+        self.histogram_backup = None
         
         # コールバック属性の初期化
         self.update_image_callback = None
@@ -111,6 +113,10 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         # ヒストグラム表示
         self._histogram_display = None
         self._show_histogram = False
+
+        # 非可逆処理のバックアップ
+        self.binary_backup: Optional[Image.Image] = None
+        self.histogram_backup: Optional[Image.Image] = None
         
         # アニメーション機能
         self._animation_enabled = False
@@ -118,6 +124,10 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         
         # チャタリング対策
         self._update_timer = None
+
+        # Presenter
+        self.presenter: Optional[DensityAdjustmentPresenter] = None
+        self.curve_editor_available = CURVE_EDITOR_AVAILABLE
 
     def get_display_name(self) -> str:
         """プラグインの表示名を返す"""
@@ -274,180 +284,18 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
 
     def setup_ui(self, parent):
         """UI生成（main_plugin.pyから呼び出される）"""
-        self.create_ui(parent)
+        if self.presenter is None:
+            self.presenter = DensityAdjustmentPresenter(self, self.curve_editor_available)
+        self.presenter.build(parent)
 
     def create_ui(self, parent):
-        """濃度調整タブのUI部品生成（analysis_plugin.pyの方針に準拠）"""
-        if not hasattr(self, '_sliders'):
-            self._sliders = {}
-        if not hasattr(self, '_labels'):
-            self._labels = {}
-        if not hasattr(self, '_buttons'):
-            self._buttons = {}
+        """後方互換用"""
+        self.setup_ui(parent)
 
-        # --- カーブエディタ（常時表示） ---
-        if CURVE_EDITOR_AVAILABLE:
-            self.gamma_curve_frame = ctk.CTkFrame(parent)
-            self.gamma_curve_frame.pack(side="top", fill="x", padx=5, pady=2)
-            # CurveEditor自体が「ガンマ補正カーブ」ラベルを表示するため、重複ラベル削除
-            self.curve_editor = CurveEditor(self.gamma_curve_frame)
-            self.curve_editor.pack(fill="x", padx=5, pady=2)
-            self.curve_editor.on_curve_change = self._on_curve_change
-
-        # --- ガンマスライダーUI削除（カーブエディタのみ表示） ---
-
-        # --- シャドウ調整（SmartSlider使用） ---
-        self._sliders['shadow'], self._labels['shadow'] = SmartSlider.create(
-            parent=parent,
-            text="シャドウ調整",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_shadow_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-
-        # --- ハイライト調整（SmartSlider使用） ---
-        self._sliders['highlight'], self._labels['highlight'] = SmartSlider.create(
-            parent=parent,
-            text="ハイライト調整",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_highlight_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-
-        # --- 色温度調整（SmartSlider使用） ---
-        self._sliders['temperature'], self._labels['temperature'] = SmartSlider.create(
-            parent=parent,
-            text="色温度調整",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_temperature_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-
-        # --- 2値化セクション（SmartSlider使用） ---
-        row_threshold = ctk.CTkFrame(parent)
-        row_threshold.pack(side="top", fill="x", padx=5, pady=2)
-        
-        self._sliders['threshold'], self._labels['threshold'] = SmartSlider.create(
-            parent=row_threshold,
-            text="2値化調整",
-            from_=0,
-            to=255,
-            default_value=127,
-            command=self._on_threshold_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-        
-        self._buttons['binary'] = PluginUIHelper.create_button(
-            row_threshold,
-            text="2値化実行",
-            command=self._on_apply_binary_threshold
-        )
-
-        # --- ヒストグラム均等化 ---
-        ctk.CTkLabel(parent, text="ヒストグラム均等化", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
-        row_hist = ctk.CTkFrame(parent)
-        row_hist.pack(side="top", fill="x", padx=5, pady=2)
-        self._buttons['histogram'] = PluginUIHelper.create_button(
-            row_hist,
-            text="ヒストグラム均等化",
-            command=self._on_histogram_equalization
-        )
-
-        # --- リセットボタン ---
-        ctk.CTkLabel(parent, text="一括操作", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
-        row_reset = ctk.CTkFrame(parent)
-        row_reset.pack(side="top", fill="x", padx=5, pady=2)
-        self._buttons['reset'] = PluginUIHelper.create_button(
-            row_reset,
-            text="全リセット",
-            command=self.reset_parameters
-        )
-
-        # --- Level 3: プリセット管理UI ---
-        preset_frame = ctk.CTkFrame(parent)
-        preset_frame.pack(fill="x", padx=5, pady=5)
-        ctk.CTkLabel(preset_frame, text="プリセット管理 (Level 3)", font=("Arial", 11, "bold")).pack(anchor="w", padx=3, pady=(5, 0))
-        
-        preset_controls = ctk.CTkFrame(preset_frame)
-        preset_controls.pack(fill="x", padx=5, pady=2)
-        
-        # プリセット名入力
-        self._preset_entry = ctk.CTkEntry(preset_controls, placeholder_text="プリセット名")
-        self._preset_entry.pack(side="left", padx=(0, 5))
-        
-        # プリセットボタン群
-        self._buttons['save_preset'] = PluginUIHelper.create_button(
-            preset_controls, text="保存", command=self._save_current_preset, width=60
-        )
-        self._buttons['save_preset'].pack(side="left", padx=2)
-        
-        self._buttons['load_preset'] = PluginUIHelper.create_button(
-            preset_controls, text="読込", command=self._load_selected_preset, width=60
-        )
-        self._buttons['load_preset'].pack(side="left", padx=2)
-        
-        # --- Level 3: 履歴管理UI ---
-        history_frame = ctk.CTkFrame(parent)
-        history_frame.pack(fill="x", padx=5, pady=2)
-        
-        history_controls = ctk.CTkFrame(history_frame)
-        history_controls.pack(fill="x", padx=5, pady=2)
-        
-        self._buttons['undo'] = PluginUIHelper.create_button(
-            history_controls, text="↶ Undo", command=self.undo_parameters, width=80
-        )
-        self._buttons['undo'].pack(side="left", padx=2)
-        
-        self._buttons['redo'] = PluginUIHelper.create_button(
-            history_controls, text="↷ Redo", command=self.redo_parameters, width=80
-        )
-        self._buttons['redo'].pack(side="left", padx=2)
-        
-        # --- Level 3: 高度オプション ---
-        advanced_frame = ctk.CTkFrame(parent)
-        advanced_frame.pack(fill="x", padx=5, pady=2)
-        ctk.CTkLabel(advanced_frame, text="高度オプション", font=("Arial", 10)).pack(anchor="w", padx=3, pady=(2, 0))
-        
-        options_row = ctk.CTkFrame(advanced_frame)
-        options_row.pack(fill="x", padx=5, pady=2)
-        
-        # リアルタイムプレビュー切り替え
-        self._realtime_preview_var = ctk.BooleanVar(value=self._preview_enabled)
-        self._realtime_checkbox = ctk.CTkCheckBox(
-            options_row, text="リアルタイム", variable=self._realtime_preview_var,
-            command=self._toggle_realtime_preview
-        )
-        self._realtime_checkbox.pack(side="left", padx=5)
-        
-        # ヒストグラム表示切り替え
-        self._histogram_var = ctk.BooleanVar(value=self._show_histogram)
-        self._histogram_checkbox = ctk.CTkCheckBox(
-            options_row, text="ヒストグラム", variable=self._histogram_var,
-            command=self._toggle_histogram_display
-        )
-        self._histogram_checkbox.pack(side="left", padx=5)
-        
-        # 手動更新ボタン（リアルタイムプレビュー無効時用）
-        self._buttons['manual_update'] = PluginUIHelper.create_button(
-            options_row, text="更新", command=self._manual_update, width=50
-        )
-        self._buttons['manual_update'].pack(side="left", padx=5)
-        
-        # ヒストグラム表示エリア
-        self._create_histogram_display(parent)
-
-        # 初期パラメータ状態を履歴に保存（Level 3）
-        self._save_parameter_state()
+    def attach_ui(self, sliders: Dict[str, Any], labels: Dict[str, Any], buttons: Dict[str, Any]) -> None:
+        self._sliders = sliders
+        self._labels = labels
+        self._buttons = buttons
 
     # --- 画像処理API（外部API） ---
 
@@ -557,11 +405,16 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             2値化済み画像
         """
         try:
+            try:
+                self.binary_backup = image.copy()
+            except Exception:
+                self.binary_backup = image
             cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
             gray_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
             _, binary_image = cv2.threshold(gray_image, int(self.threshold_value), 255, cv2.THRESH_BINARY)
             binary_rgb = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2RGB)
             result_image = Image.fromarray(binary_rgb)
+            self.image = result_image
             return result_image
         except Exception as e:
             print(f"2値化エラー: {e}")
@@ -615,8 +468,42 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
 
     def _on_histogram_equalization(self):
         """ヒストグラム均等化ボタンのイベントハンドラ（内部用）"""
+        if self.image is not None:
+            try:
+                self.histogram_backup = self.image.copy()
+            except Exception:
+                self.histogram_backup = self.image
         if hasattr(self, 'histogram_callback') and callable(self.histogram_callback):
             self.histogram_callback()
+        else:
+            # デフォルト処理が未定義の場合は何もしない
+            pass
+        if hasattr(self, '_buttons') and 'undo_histogram' in self._buttons:
+            self._buttons['undo_histogram'].configure(state="normal")
+
+    def _on_undo_binary_threshold(self) -> None:
+        """2値化取り消し処理"""
+        if self.binary_backup is None:
+            print("ℹ️ 2値化取消用バックアップがありません")
+            return
+        if hasattr(self, 'update_image_callback') and callable(self.update_image_callback):
+            self.update_image_callback(self.binary_backup)
+        self.image = self.binary_backup
+        self.binary_backup = None
+        if hasattr(self, '_buttons') and 'undo_binary' in self._buttons:
+            self._buttons['undo_binary'].configure(state="disabled")
+
+    def _on_undo_histogram_equalization(self) -> None:
+        """ヒストグラム均等化取り消し処理"""
+        if self.histogram_backup is None:
+            print("ℹ️ ヒストグラム取消用バックアップがありません")
+            return
+        if hasattr(self, 'update_image_callback') and callable(self.update_image_callback):
+            self.update_image_callback(self.histogram_backup)
+        self.image = self.histogram_backup
+        self.histogram_backup = None
+        if hasattr(self, '_buttons') and 'undo_histogram' in self._buttons:
+            self._buttons['undo_histogram'].configure(state="disabled")
 
     # --- 互換性メソッド（非推奨） ---
     
@@ -652,6 +539,11 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
     def _on_apply_binary_threshold(self) -> None:
         """2値化実行ボタンのイベントハンドラ（内部用）"""
         self.applied_binary = True
+        if self.image is not None:
+            try:
+                self.binary_backup = self.image.copy()
+            except Exception:
+                self.binary_backup = self.image
         if hasattr(self, 'binary_threshold_callback') and callable(self.binary_threshold_callback):
             self.binary_threshold_callback()
         else:
@@ -660,6 +552,9 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
                 result_img = self.apply_binary_threshold(self.image)
                 if hasattr(self, 'update_image_callback') and callable(self.update_image_callback):
                     self.update_image_callback(result_img)
+                self.image = result_img
+        if hasattr(self, '_buttons') and 'undo_binary' in self._buttons:
+            self._buttons['undo_binary'].configure(state="normal")
 
     # ===============================
     # 7. Level 3 高度内部処理（プライベート）

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Advanced Image Editor
 高度画像編集アプリケーション
@@ -23,11 +24,22 @@ cd <本リポジトリのクローン先ディレクトリ>
 【バージョン】Advanced Image Editor 1.0.0
 【最終更新】2025年10月3日
 """
+
+from pathlib import Path
 import sys
-sys.path.append('/Users/tinoue/Development.local/lib-image_toolkit')
-#!/usr/bin/env python3
-import sys
-sys.path.append('/Users/tinoue/Development.local/lib-image_toolkit')
+import os
+import json
+from typing import List
+
+# プロジェクトの src ディレクトリをモジュール検索パスに追加（従来 import 互換のため）
+SRC_DIR = Path(__file__).resolve().parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+# 互換用の外部ライブラリディレクトリ（必要な場合のみ）
+EXTRA_LIB = Path("/Users/tinoue/Development.local/lib-image_toolkit")
+if EXTRA_LIB.exists() and str(EXTRA_LIB) not in sys.path:
+    sys.path.append(str(EXTRA_LIB))
 
 try:
     import tkinter as tk
@@ -37,7 +49,6 @@ try:
     import numpy as np
     from tkinter import filedialog, messagebox
     import os
-    import sys
     import argparse
     print("✅ 必要なライブラリのインポートが完了しました")
 except ImportError as e:
@@ -160,112 +171,130 @@ class AdvancedImageEditor(ctk.CTk):
     
     def setup_plugin_tabs(self):
         """プラグイン用のタブビューをセットアップ（各タブにUI部品を生成）"""
-        plugin_tabs = {
-            "basic_adjustment": "🎯 基本調整",
-            "density_adjustment": "🌈 濃度調整", 
-            "filter_processing": "🌀 フィルター",
-            "image_analysis": "🔬 画像解析"
+        icon_map = {
+            "basic_adjustment": "🎯",
+            "density_adjustment": "🌈",
+            "filter_processing": "🌀",
+            "image_analysis": "🔬"
         }
+        plugin_tabs: Dict[str, str] = {}
+        metadata_source = getattr(self.plugin_manager, "plugin_metadata", {})
+        preferred_order: List[str] = []
+        order_path = Path(__file__).resolve().parents[1] / "config" / "plugin_order.json"
+        if order_path.exists():
+            try:
+                with order_path.open("r", encoding="utf-8") as f:
+                    preferred_order = json.load(f).get("order", [])
+            except Exception as e:
+                warning_print(f"プラグイン順序設定の読み込みに失敗しました: {e}")
+        order_index = {plugin_id: idx for idx, plugin_id in enumerate(preferred_order)}
+        if metadata_source:
+            entries = [
+                (internal_name, meta)
+                for internal_name, meta in metadata_source.items()
+                if meta.get("category") != "internal"
+            ]
+            entries.sort(
+                key=lambda item: (
+                    order_index.get(item[1].get("plugin_id", item[0]), len(order_index)),
+                    item[1].get("display_name", item[0])
+                )
+            )
+            for internal_name, meta in entries:
+                icon = icon_map.get(internal_name) or icon_map.get(meta.get("plugin_id", internal_name), "")
+                display_name = meta.get("display_name", internal_name)
+                tab_label = f"{icon} {display_name}" if icon else display_name
+                plugin_tabs[internal_name] = tab_label
+        else:
+            # フォールバック（従来の静的定義）
+            plugin_tabs = {
+                "basic_adjustment": "🎯 基本調整",
+                "density_adjustment": "🌈 濃度調整", 
+                "filter_processing": "🌀 フィルター",
+                "image_analysis": "🔬 画像解析"
+            }
         self.plugin_frames = self.ui.setup_plugin_tabs(plugin_tabs)
 
         # 各プラグインのUI部品生成（analysis_plugin.py方式）
         # プラグインインスタンスはsetup_pluginsで生成済みと仮定
         # self.plugin_instancesはsetup_pluginsで作成する
         if hasattr(self, 'plugin_instances'):
-            # 基本調整 (create_plugin_tabsで既にsetup_ui経由で作成済み)
-            # 濃度調整 (create_plugin_tabsで既にsetup_ui経由で作成済み)
-            # フィルター
-            if 'filter_processing' in self.plugin_instances:
-                self.plugin_instances['filter_processing'].create_ui(self.plugin_frames['filter_processing'])
-            # 画像解析（ここではUI生成しない）
+            pass
     
 
     def setup_plugins(self):
         """プラグインを登録・初期化（UI生成→コールバック登録・検証の順に分離）"""
         info_print("プラグインを登録中...")
-        plugin_configs = [
-            {
-                'name': 'basic_adjustment',
-                'class': BasicAdjustmentPlugin,
-                'callbacks': {
-                    'parameter_change': self.on_plugin_parameter_change,
-                }
+        callback_map = {
+            'basic_adjustment': {
+                'parameter_change': self.on_plugin_parameter_change,
             },
-            {
-                'name': 'density_adjustment',
-                'class': DensityAdjustmentPlugin,
-                'callbacks': {
-                    'parameter_change': self.on_plugin_parameter_change,
-                    'histogram': self.apply_histogram_equalization,
-                    'threshold': self.apply_binary_threshold,
-                }
+            'density_adjustment': {
+                'parameter_change': self.on_plugin_parameter_change,
+                'histogram': self.apply_histogram_equalization,
+                'threshold': self.apply_binary_threshold,
             },
-            {
-                'name': 'filter_processing',
-                'class': FilterProcessingPlugin,
-                'callbacks': {
-                    'parameter_change': self.on_plugin_parameter_change,
-                    'special_filter': self.apply_special_filter,
-                    'morphology': self.apply_morphology_operation,
-                    'contour': self.apply_contour_detection,
-                    'undo_special_filter': self.undo_special_filter,
-                    'undo_morphology': self.undo_morphology_operation,
-                    'undo_contour': self.undo_contour_detection,
-                }
+            'filter_processing': {
+                'parameter_change': self.on_plugin_parameter_change,
+                'special_filter': self.apply_special_filter,
+                'morphology': self.apply_morphology_operation,
+                'contour': self.apply_contour_detection,
+                'undo_special_filter': self.undo_special_filter,
+                'undo_morphology': self.undo_morphology_operation,
+                'undo_contour': self.undo_contour_detection,
             },
-            {
-                'name': 'histogram_analysis',
-                'class': HistogramAnalysisPlugin,
-                'callbacks': {}
-            },
-            {
-                'name': 'image_analysis',
-                'class': ImageAnalysisPlugin,
-                'callbacks': {
-                    'histogram': self.show_histogram_analysis,
-                    'feature': self.apply_feature_detection,
-                    'frequency': self.apply_frequency_analysis,
-                    'blur': self.detect_blur,
-                    'noise': self.analyze_noise,
-                    'undo_features': self.undo_feature_detection,
-                    'undo_frequency': self.undo_frequency_analysis,
-                    'undo_blur': self.undo_blur_detection,
-                    'undo_noise': self.undo_noise_analysis,
-                    'undo_histogram': self.undo_histogram_analysis,
-                }
+            'image_analysis': {
+                'histogram': self.show_histogram_analysis,
+                'feature': self.apply_feature_detection,
+                'frequency': self.apply_frequency_analysis,
+                'blur': self.detect_blur,
+                'noise': self.analyze_noise,
+                'undo_features': self.undo_feature_detection,
+                'undo_frequency': self.undo_frequency_analysis,
+                'undo_blur': self.undo_blur_detection,
+                'undo_noise': self.undo_noise_analysis,
+                'undo_histogram': self.undo_histogram_analysis,
             }
-        ]
+        }
 
-        # プラグインインスタンス生成・UI生成
+        # メタデータベースでプラグインを自動検出
+        discovered_ids = self.plugin_manager.discover_plugins()
         plugin_instances = {}
-        histogram_plugin_instance = None
-        for config in plugin_configs:
-            plugin_name = config['name']
-            plugin_class = config['class']
-            try:
-                plugin_instance = plugin_class()
-                plugin_instances[plugin_name] = plugin_instance
-                self.plugin_manager.register_plugin(plugin_instance)
-                debug_print(f"   ✅ {plugin_name} プラグインインスタンス生成・登録完了")
-                if plugin_name == 'histogram_analysis':
-                    histogram_plugin_instance = plugin_instance
-                # 濃度調整プラグインには画像表示コールバックを設定
-                if plugin_name == 'density_adjustment' and hasattr(self.image_editor, 'update_current_image'):
-                    if hasattr(plugin_instance, 'set_update_image_callback'):
-                        plugin_instance.set_update_image_callback(self.image_editor.update_current_image)
-                        debug_print("   ✓ density_adjustment: update_image_callback 設定完了")
-            except Exception as e:
-                error_print(f"{plugin_name} プラグインインスタンス生成失敗: {e}")
+
+        for plugin_id in discovered_ids:
+            plugin_instance = self.plugin_manager.get_plugin_by_id(plugin_id)
+            if not plugin_instance:
                 continue
+            plugin_instances[plugin_instance.name] = plugin_instance
+            debug_print(f"   ✅ {plugin_id} プラグインインスタンス登録完了")
+            if plugin_instance.name == 'density_adjustment' and hasattr(self.image_editor, 'update_current_image'):
+                if hasattr(plugin_instance, 'set_update_image_callback'):
+                    plugin_instance.set_update_image_callback(self.image_editor.update_current_image)
+                    debug_print("   ✓ density_adjustment: update_image_callback 設定完了")
+
+        # HistogramAnalysisPlugin は補助プラグインのため手動登録
+        histogram_plugin_instance = None
+        try:
+            histogram_plugin_instance = HistogramAnalysisPlugin()
+            histogram_metadata = {
+                "plugin_id": "histogram_analysis",
+                "display_name": "ヒストグラム解析",
+                "description": "ヒストグラム表示専用プラグイン",
+                "module": "plugins.analysis.histogram_analysis_plugin",
+                "class": "HistogramAnalysisPlugin",
+                "category": "internal"
+            }
+            histogram_plugin_instance._metadata = histogram_metadata  # type: ignore[attr-defined]
+            self.plugin_manager.register_plugin(histogram_plugin_instance, metadata=histogram_metadata)
+            plugin_instances['histogram_analysis'] = histogram_plugin_instance
+            debug_print("   ✅ histogram_analysis プラグインインスタンス生成・登録完了")
+        except Exception as e:
+            error_print(f"histogram_analysis プラグインインスタンス生成失敗: {e}")
 
         # UI生成（create_plugin_tabsで各フレームにUI生成済み）
         # コールバック登録・検証
-        for config in plugin_configs:
-            plugin_name = config['name']
-            plugin_instance = plugin_instances.get(plugin_name)
-            callbacks = config.get('callbacks', {})
-            if not plugin_instance:
-                continue
+        for plugin_name, plugin_instance in plugin_instances.items():
+            callbacks = callback_map.get(plugin_name, {})
             try:
                 self._setup_plugin_callbacks(plugin_instance, callbacks, plugin_name)
             except Exception as e:
@@ -292,55 +321,6 @@ class AdvancedImageEditor(ctk.CTk):
         # ここでインスタンスを保存
         self.plugin_instances = plugin_instances
         
-    def _register_plugins_from_config(self, plugin_configs):
-        """プラグイン設定から一括登録（メンテナンス性向上）"""
-        successful_plugins = 0
-        failed_plugins = []
-        
-        histogram_plugin_instance = None
-        for config in plugin_configs:
-            try:
-                plugin_name = config['name']
-                plugin_class = config['class']
-                callbacks = config.get('callbacks', {})
-
-                debug_print(f"   🔌 {plugin_name} プラグインを初期化中...")
-
-                # プラグインインスタンス作成
-                plugin_instance = plugin_class()
-
-                # HistogramAnalysisPluginのインスタンスを保存
-                if plugin_name == 'histogram_analysis':
-                    histogram_plugin_instance = plugin_instance
-
-                # コールバック設定
-                self._setup_plugin_callbacks(plugin_instance, callbacks, plugin_name)
-
-                # ImageAnalysisPluginにHistogramAnalysisPluginのshow_histogramを渡す
-                if plugin_name == 'image_analysis' and histogram_plugin_instance:
-                    if hasattr(plugin_instance, 'set_rgb_histogram_callback'):
-                        plugin_instance.set_rgb_histogram_callback(histogram_plugin_instance.show_histogram)
-
-                # プラグインマネージャーに登録
-                self.plugin_manager.register_plugin(plugin_instance)
-
-                successful_plugins += 1
-                debug_print(f"   ✅ {plugin_name} プラグイン登録完了")
-
-            except Exception as e:
-                failed_plugins.append({'name': plugin_name, 'error': str(e)})
-                error_print(f"{plugin_name} プラグイン登録失敗: {e}")
-                # プラグイン単体の失敗はアプリ全体を止めない
-                continue
-        
-        # 結果サマリー
-        if failed_plugins:
-            warning_print(f"{len(failed_plugins)}個のプラグインで問題が発生しましたが、アプリは継続実行されます")
-            for failed in failed_plugins:
-                warning_print(f"- {failed['name']}: {failed['error']}")
-        debug_print(f"プラグイン登録結果: 成功={successful_plugins}, 失敗={len(failed_plugins)}")
-        print("[DEBUG] plugin_manager.plugins.keys():", self.plugin_manager.plugins.keys())
-    
     def _setup_plugin_callbacks(self, plugin_instance, callbacks, plugin_name):
         """プラグインのコールバック設定（設定漏れ防止）"""
         # コールバック設定のマッピング
@@ -642,6 +622,8 @@ class AdvancedImageEditor(ctk.CTk):
                 filtered_image = filter_plugin.apply_special_filter(current_image, filter_type)
                 self.image_editor.update_current_image(filtered_image)
                 self.image_editor.status_label.configure(text=f"✨ {filter_type}フィルターを適用しました")
+                if hasattr(filter_plugin, '_enable_undo_button'):
+                    filter_plugin._enable_undo_button(f"undo_{filter_type}")
                 debug_print(f"✅ 特殊フィルター適用完了: {filter_type}")
             else:
                 debug_print("❌ フィルタープラグインが見つかりません")
@@ -695,6 +677,8 @@ class AdvancedImageEditor(ctk.CTk):
                 processed_image = apply_method(current_image, operation)
                 self.image_editor.update_current_image(processed_image)
                 self.image_editor.display_image(processed_image)
+                if hasattr(filter_plugin, '_enable_undo_button'):
+                    filter_plugin._enable_undo_button("undo_morphology")
                 self.image_editor.status_label.configure(text=f"🔧 {operation}演算を適用しました")
             else:
                 self.image_editor.status_label.configure(text="❌ フィルター処理プラグインが見つかりません")
@@ -721,6 +705,8 @@ class AdvancedImageEditor(ctk.CTk):
                 processed_image = apply_method(current_image)
                 self.image_editor.update_current_image(processed_image)
                 self.image_editor.display_image(processed_image)
+                if hasattr(filter_plugin, '_enable_undo_button'):
+                    filter_plugin._enable_undo_button("undo_contour")
                 self.image_editor.status_label.configure(text="🎯 輪郭検出を適用しました")
             else:
                 self.image_editor.status_label.configure(text="❌ フィルター処理プラグインが見つかりません")

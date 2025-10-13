@@ -1,0 +1,9 @@
+{
+  "plugin_id": "basic_adjustment",
+  "module": "plugins.basic.basic_plugin",
+  "class": "BasicAdjustmentPlugin",
+  "display_name": "基本調整",
+  "description": "明度・コントラスト・彩度など基本的な画像調整機能を提供します。",
+  "version": "1.0.0",
+  "category": "adjustment"
+}

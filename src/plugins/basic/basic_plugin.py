@@ -6,16 +6,15 @@
 """
 
 from PIL import Image, ImageEnhance
-import customtkinter as ctk
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # 相対インポートでcore moduleを使用
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.plugin_base import ImageProcessorPlugin, PluginUIHelper
-from utils.smart_slider import SmartSlider
+from core.plugin_base import ImageProcessorPlugin
+from .presenter import BasicAdjustmentPresenter
 
 
 class BasicAdjustmentPlugin(ImageProcessorPlugin):
@@ -63,6 +62,9 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         
         # コールバック属性の初期化
         self.update_image_callback = None
+
+        # Presenter（UI担当）
+        self.presenter: Optional[BasicAdjustmentPresenter] = None
         
         # UI更新フラグ（スライダーリセット用）
         self._updating_ui = False
@@ -103,10 +105,10 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
         self._preview_enabled = True
         self._preview_quality = 'high'  # basic調整は高品質でもパフォーマンス良好
         
-        # UI要素管理用
-        self._sliders = {}
-        self._labels = {}
-        self._buttons = {}
+        # UI要素管理用（Presenterから受け取る）
+        self._sliders: Dict[str, Any] = {}
+        self._labels: Dict[str, Any] = {}
+        self._buttons: Dict[str, Any] = {}
         
         # チャタリング対策
         self._update_timer = None
@@ -264,85 +266,22 @@ class BasicAdjustmentPlugin(ImageProcessorPlugin):
 
     # --- UI生成・操作（外部API） ---
 
-    def setup_ui(self, parent: ctk.CTkFrame) -> None:
+    def setup_ui(self, parent) -> None:
         """UI生成（main_plugin.pyから呼び出される）"""
-        self.create_ui(parent)
-        
-    def create_ui(self, parent: ctk.CTkFrame) -> None:
-        """基本調整タブのUI生成（明るさ・コントラスト・彩度）"""
-        print("[DEBUG] BasicAdjustmentPlugin.create_ui called")
-        
-        # --- 明度調整（SmartSlider使用） ---
-        self._sliders['brightness'], self._labels['brightness'] = SmartSlider.create(
-            parent=parent,
-            text="明度調整",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_brightness_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-
-        # --- コントラスト調整（SmartSlider使用） ---
-        self._sliders['contrast'], self._labels['contrast'] = SmartSlider.create(
-            parent=parent,
-            text="コントラスト調整",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_contrast_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-
-        # --- 彩度調整（SmartSlider使用） ---
-        self._sliders['saturation'], self._labels['saturation'] = SmartSlider.create(
-            parent=parent,
-            text="彩度調整",
-            from_=-100,
-            to=100,
-            default_value=0,
-            command=self._on_saturation_change,
-            value_format="{:.0f}",
-            value_type=int
-        )
-
-        # --- リセットボタン ---
-        ctk.CTkLabel(parent, text="一括操作", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(10, 0))
-        row_reset = ctk.CTkFrame(parent)
-        row_reset.pack(side="top", fill="x", padx=5, pady=2)
-        self._buttons['reset'] = PluginUIHelper.create_button(
-            row_reset,
-            text="全リセット",
-            command=self.reset_parameters
-        )
-
-        # --- Level 3: 基本調整プリセットUI ---
-        preset_frame = ctk.CTkFrame(parent)
-        preset_frame.pack(fill="x", padx=5, pady=5)
-        ctk.CTkLabel(preset_frame, text="基本調整プリセット", font=("Arial", 11, "bold")).pack(anchor="w", padx=3, pady=(5, 0))
-        
-        # プリセット選択
-        preset_select_frame = ctk.CTkFrame(preset_frame)
-        preset_select_frame.pack(fill="x", padx=5, pady=2)
-        
-        self._preset_var = ctk.StringVar(value="おまかせ調整")
-        self._preset_menu = ctk.CTkOptionMenu(
-            preset_select_frame,
-            variable=self._preset_var,
-            values=list(self._presets.keys()),
-            command=self._on_preset_selected
-        )
-        self._preset_menu.pack(side="left", padx=(0, 5))
-        
-        self._buttons['load_preset'] = PluginUIHelper.create_button(
-            preset_select_frame, text="適用", command=self._load_selected_preset, width=60
-        )
-        self._buttons['load_preset'].pack(side="left", padx=2)
-        
-
+        if self.presenter is None:
+            self.presenter = BasicAdjustmentPresenter(self)
+        self.presenter.build(parent)
     
+    def create_ui(self, parent):
+        """後方互換用のダミー実装"""
+        self.setup_ui(parent)
+
+    # Presenter から渡される UI 要素を保持
+    def attach_ui(self, sliders: Dict[str, Any], labels: Dict[str, Any], buttons: Dict[str, Any]) -> None:
+        self._sliders = sliders
+        self._labels = labels
+        self._buttons = buttons
+
     # ===============================
     # 4. イベントハンドラー（コールバック）
     # ===============================

@@ -7,6 +7,9 @@
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, Callable, List, Tuple, Union
+from pathlib import Path
+import importlib
+import json
 from PIL import Image
 import customtkinter as ctk
 import threading
@@ -133,8 +136,10 @@ class PluginManager:
     def __init__(self):
         self.plugins: Dict[str, ImageProcessorPlugin] = {}
         self.plugin_order: List[str] = []
+        self.plugin_metadata: Dict[str, Dict[str, Any]] = {}
+        self._alias_map: Dict[str, str] = {}
         
-    def register_plugin(self, plugin: ImageProcessorPlugin) -> None:
+    def register_plugin(self, plugin: ImageProcessorPlugin, metadata: Optional[Dict[str, Any]] = None) -> None:
         """
         プラグインを登録
         Args:
@@ -143,6 +148,11 @@ class PluginManager:
         self.plugins[plugin.name] = plugin
         if plugin.name not in self.plugin_order:
             self.plugin_order.append(plugin.name)
+        plugin_metadata = metadata if metadata is not None else getattr(plugin, "_metadata", None)
+        if plugin_metadata:
+            self.plugin_metadata[plugin.name] = plugin_metadata
+            plugin_id = plugin_metadata.get("plugin_id", plugin.name)
+            self._alias_map[plugin_id] = plugin.name
     
     def unregister_plugin(self, plugin_name: str) -> None:
         """
@@ -155,6 +165,49 @@ class PluginManager:
         if plugin_name in self.plugin_order:
             self.plugin_order.remove(plugin_name)
     
+    def discover_plugins(self, plugins_root: Optional[Union[str, Path]] = None) -> List[str]:
+        """
+        plugin.json メタデータをもとにプラグインを自動登録する
+        
+        Args:
+            plugins_root: プラグイン探索ディレクトリ（省略時は src/plugins）
+        
+        Returns:
+            登録に成功したプラグインIDの一覧
+        """
+        discovered: List[str] = []
+        root = Path(plugins_root) if plugins_root else Path(__file__).resolve().parents[1] / "plugins"
+        if not root.exists():
+            print(f"⚠️ プラグインディレクトリが見つかりません: {root}")
+            return discovered
+        
+        for entry in sorted(root.iterdir()):
+            if not entry.is_dir():
+                continue
+            metadata_path = entry / "plugin.json"
+            if not metadata_path.exists():
+                continue
+            try:
+                with metadata_path.open("r", encoding="utf-8") as fp:
+                    metadata = json.load(fp)
+                module_name = metadata["module"]
+                class_name = metadata["class"]
+                plugin_id = metadata.get("plugin_id") or entry.name
+                
+                module = importlib.import_module(module_name)
+                plugin_cls = getattr(module, class_name)
+                plugin_instance: ImageProcessorPlugin = plugin_cls()
+                # メタデータをインスタンスに添付（必要に応じて参照）
+                metadata.setdefault("display_name", getattr(plugin_instance, "get_display_name", lambda: plugin_id)())
+                metadata.setdefault("description", getattr(plugin_instance, "get_description", lambda: "")())
+                plugin_instance._metadata = metadata  # type: ignore[attr-defined]
+                
+                self.register_plugin(plugin_instance, metadata=metadata)
+                discovered.append(plugin_id)
+            except Exception as e:
+                print(f"❌ プラグイン読み込みエラー ({entry.name}): {e}")
+        return discovered
+    
     def get_plugin(self, plugin_name: str) -> Optional[ImageProcessorPlugin]:
         """
         プラグインを取得
@@ -164,6 +217,13 @@ class PluginManager:
             プラグインインスタンス（存在しない場合はNone）
         """
         return self.plugins.get(plugin_name)
+    
+    def get_plugin_by_id(self, plugin_id: str) -> Optional[ImageProcessorPlugin]:
+        """
+        plugin.json で定義されたプラグインIDからプラグインを取得
+        """
+        mapped = self._alias_map.get(plugin_id, plugin_id)
+        return self.get_plugin(mapped)
     
     def get_all_plugins(self) -> List[ImageProcessorPlugin]:
         """全プラグインのリストを取得"""
@@ -306,7 +366,9 @@ class PluginUIHelper:
         parent: ctk.CTkFrame,
         text: str,
         command: Optional[Callable] = None,
-        width: int = 120
+        width: int = 120,
+        auto_pack: bool = True,
+        pack_kwargs: Optional[Dict[str, Any]] = None
     ) -> ctk.CTkButton:
         """
         ボタンを作成
@@ -315,6 +377,8 @@ class PluginUIHelper:
             text: ボタンテキスト
             command: クリック時のコールバック
             width: ボタン幅
+            auto_pack: True の場合はこの関数内で pack する
+            pack_kwargs: auto_pack 時の pack パラメータ
         Returns:
             ボタン
         """
@@ -325,8 +389,76 @@ class PluginUIHelper:
             width=width,
             font=("Arial", 11)
         )
-        button.pack(padx=5, pady=3)
+        if auto_pack:
+            kwargs = pack_kwargs or {"padx": 5, "pady": 3}
+            button.pack(**kwargs)
         return button
+    
+    @staticmethod
+    def create_slider_row(
+        parent: ctk.CTkFrame,
+        text: str,
+        from_: Union[int, float],
+        to: Union[int, float],
+        default_value: Union[int, float],
+        command: Optional[Callable[[Union[int, float]], None]] = None,
+        value_format: str = "{:.0f}",
+        value_type: type = int,
+        pack_kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[ctk.CTkSlider, ctk.CTkLabel]:
+        """
+        ラベル・スライダー・値表示ラベルを1行に配置して生成するヘルパー
+        Args:
+            parent: 親フレーム
+            text: ラベルテキスト
+            from_: スライダー最小値
+            to: スライダー最大値
+            default_value: デフォルト値
+            command: スライダー変更時のコールバック
+            value_format: 値表示のフォーマット
+            value_type: 値の型（int or float）
+            pack_kwargs: rowフレームのpack引数
+        Returns:
+            (スライダー, 値ラベル)
+        """
+        row_kwargs = pack_kwargs or {"fill": "x", "padx": 5, "pady": 5}
+        row = ctk.CTkFrame(parent)
+        row.pack(**row_kwargs)
+        row.grid_columnconfigure(1, weight=1)
+
+        title_label = ctk.CTkLabel(row, text=text, font=("Arial", 11), anchor="w", width=140)
+        title_label.grid(row=0, column=0, padx=(3, 8), pady=3, sticky="w")
+
+        slider = ctk.CTkSlider(row, from_=from_, to=to)
+        slider.grid(row=0, column=1, padx=(0, 8), pady=3, sticky="ew")
+        slider.set(default_value)
+
+        value_label = ctk.CTkLabel(
+            row,
+            text=value_format.format(default_value),
+            font=("Arial", 10),
+            anchor="e",
+            width=60
+        )
+        value_label.grid(row=0, column=2, padx=(0, 3), pady=3, sticky="e")
+
+        # SmartSlider を利用して値の拘束・デバウンスを共通化
+        from utils.smart_slider import SmartSlider  # 遅延インポートで循環参照回避
+
+        smart_slider = SmartSlider(
+            slider=slider,
+            label=value_label,
+            min_value=from_,
+            max_value=to,
+            value_type=value_type,
+            debounce_delay=0.1,
+            value_format=value_format,
+            callback=command
+        )
+        smart_slider.set_value(default_value)
+        setattr(slider, "smart_slider", smart_slider)
+
+        return slider, value_label
     
     @staticmethod
     def create_enhanced_slider_with_label(

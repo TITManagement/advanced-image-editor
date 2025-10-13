@@ -1,0 +1,9 @@
+{
+  "plugin_id": "image_analysis",
+  "module": "plugins.analysis.analysis_plugin",
+  "class": "ImageAnalysisPlugin",
+  "display_name": "画像解析",
+  "description": "ヒストグラム解析や特徴点検出、周波数解析などの画像解析機能を提供します。",
+  "version": "1.0.0",
+  "category": "analysis"
+}

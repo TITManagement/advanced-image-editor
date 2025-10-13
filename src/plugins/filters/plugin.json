@@ -1,0 +1,9 @@
+{
+  "plugin_id": "filter_processing",
+  "module": "plugins.filters.filters_plugin",
+  "class": "FilterProcessingPlugin",
+  "display_name": "フィルター処理",
+  "description": "ノイズ除去やエッジ検出、モルフォロジーなど各種フィルター機能を提供します。",
+  "version": "1.0.0",
+  "category": "filter"
+}

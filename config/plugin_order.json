@@ -1,0 +1,8 @@
+{
+  "order": [
+    "basic_adjustment",
+    "density_adjustment",
+    "filter_processing",
+    "image_analysis"
+  ]
+}

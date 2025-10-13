@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""
+Filter Processing Presenter
+
+フィルタープラグインの UI を生成・管理し、ボタン状態の更新も引き受ける。
+"""
+
+from __future__ import annotations
+
+from typing import Dict, Any, Optional
+import customtkinter as ctk
+
+from core.plugin_base import PluginUIHelper
+
+if False:
+    from .filters_plugin import FilterProcessingPlugin  # for type checking
+
+
+class FilterProcessingPresenter:
+    """フィルター処理プラグインの UI を構築する Presenter"""
+
+    def __init__(self, plugin: "FilterProcessingPlugin") -> None:
+        """Presenter を初期化し、UI ウィジェット参照の辞書を準備する。"""
+        self.plugin = plugin
+        self.sliders: Dict[str, Any] = {}
+        self.labels: Dict[str, Any] = {}
+        self.buttons: Dict[str, Any] = {}
+        self._container: Optional[ctk.CTkFrame] = None
+        self._after_target: Optional[Any] = None
+
+    def build(self, parent: ctk.CTkFrame) -> None:
+        """
+        タブ内にフィルター操作 UI を構築し、作成したウィジェットをプラグインへ渡す。
+        """
+        self.sliders.clear()
+        self.labels.clear()
+        self.buttons.clear()
+        self._container = parent
+        self._after_target = parent  # CTkFrame は after を継承している
+
+        # ブラー強度（1行配置）
+        blur_slider, blur_label = PluginUIHelper.create_slider_row(
+            parent=parent,
+            text="ガウシアンブラー",
+            from_=0,
+            to=25,
+            default_value=0,
+            command=self.plugin._on_blur_change,
+            value_format="{:.0f}",
+            value_type=int
+        )
+        self.sliders['blur'] = blur_slider
+        self.labels['blur'] = blur_label
+
+        # シャープニング強度（1行配置）
+        sharp_slider, sharp_label = PluginUIHelper.create_slider_row(
+            parent=parent,
+            text="シャープニング強度",
+            from_=0.0,
+            to=10.0,
+            default_value=0.0,
+            command=self.plugin._on_sharpen_change,
+            value_format="{:.1f}",
+            value_type=float
+        )
+        self.sliders['sharpen'] = sharp_slider
+        self.labels['sharpen'] = sharp_label
+
+        # 特殊フィルターセクション
+        filter_frame = ctk.CTkFrame(parent)
+        filter_frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(filter_frame, text="特殊フィルター", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+
+        denoise_section = ctk.CTkFrame(filter_frame)
+        denoise_section.pack(fill="x", padx=5, pady=3)
+        self._create_special_filter_buttons(denoise_section, [
+            ("denoise", "ノイズ除去"),
+            ("emboss", "エンボス"),
+            ("edge", "エッジ検出"),
+        ])
+
+        # モルフォロジー演算
+        morph_frame = ctk.CTkFrame(parent)
+        morph_frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(morph_frame, text="モルフォロジー演算", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+
+        morph_slider, morph_label = PluginUIHelper.create_slider_row(
+            parent=morph_frame,
+            text="カーネルサイズ",
+            from_=3,
+            to=15,
+            default_value=5,
+            command=self.plugin._on_kernel_change,
+            value_format="{:.0f}",
+            value_type=int
+        )
+        self.sliders['kernel'] = morph_slider
+        self.labels['kernel'] = morph_label
+
+        morph_buttons_frame = ctk.CTkFrame(morph_frame)
+        morph_buttons_frame.pack(fill="x", padx=5, pady=5)
+
+        morph_ops_frame = ctk.CTkFrame(morph_buttons_frame)
+        morph_ops_frame.pack(fill="x", pady=(0, 3))
+        for morph_type, text in [
+            ("erosion", "侵食"),
+            ("dilation", "膨張"),
+            ("opening", "開放"),
+            ("closing", "閉鎖"),
+        ]:
+            btn = PluginUIHelper.create_button(
+                morph_ops_frame,
+                text=text,
+                command=lambda mt=morph_type: self.plugin._apply_morphology(mt),
+                width=80,
+                auto_pack=False
+            )
+            btn.pack(side="left", padx=2, pady=3)
+            self.buttons[morph_type] = btn
+
+        morph_undo_frame = ctk.CTkFrame(morph_buttons_frame)
+        morph_undo_frame.pack(fill="x")
+        undo_morph = PluginUIHelper.create_button(
+            morph_undo_frame,
+            text="🔄 モルフォロジー取消",
+            command=self.plugin._undo_morphology,
+            width=180,
+            auto_pack=False
+        )
+        undo_morph.pack(anchor="w", padx=5, pady=3)
+        undo_morph.configure(state=ctk.DISABLED)
+        self.buttons['undo_morphology'] = undo_morph
+
+        # 輪郭検出
+        contour_frame = ctk.CTkFrame(parent)
+        contour_frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(contour_frame, text="輪郭検出", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+
+        contour_section = ctk.CTkFrame(contour_frame)
+        contour_section.pack(fill="x", padx=5, pady=3)
+
+        contour_btn = PluginUIHelper.create_button(
+            contour_section,
+            text="輪郭検出",
+            command=self.plugin._apply_contour_detection,
+            width=100,
+            auto_pack=False
+        )
+        contour_btn.pack(side="left", padx=(0, 5), pady=3)
+        self.buttons['contour'] = contour_btn
+
+        undo_contour = PluginUIHelper.create_button(
+            contour_section,
+            text="🔄 取消",
+            command=self.plugin._undo_contour,
+            width=60,
+            auto_pack=False
+        )
+        undo_contour.pack(side="left", pady=3)
+        undo_contour.configure(state=ctk.DISABLED)
+        self.buttons['undo_contour'] = undo_contour
+
+        # プラグインに UI 要素を引き渡す
+        self.plugin.attach_ui(self.sliders, self.labels, self.buttons)
+
+    def _create_special_filter_buttons(self, parent: ctk.CTkFrame, filters: list[tuple[str, str]]) -> None:
+        """特殊フィルター用の適用・取消ボタン行を生成する。"""
+        for filter_type, text in filters:
+            row = ctk.CTkFrame(parent)
+            row.pack(fill="x", padx=5, pady=2)
+
+            apply_btn = PluginUIHelper.create_button(
+                row,
+                text=text,
+                command=lambda ft=filter_type: self.plugin._apply_special_filter(ft),
+                width=100,
+                auto_pack=False
+            )
+            apply_btn.pack(side="left", padx=(0, 5), pady=3)
+            self.buttons[filter_type] = apply_btn
+
+            undo_btn = PluginUIHelper.create_button(
+                row,
+                text="🔄 取消",
+                command=lambda ft=filter_type: self.plugin._undo_special_filter(ft),
+                width=60,
+                auto_pack=False
+            )
+            undo_btn.pack(side="left", pady=3)
+            undo_btn.configure(state=ctk.DISABLED)
+            self.buttons[f"undo_{filter_type}"] = undo_btn
+
+    def set_button_state(self, button_name: str, desired_state: str) -> bool:
+        """
+        指定されたボタンの state を UI スレッドで更新する。
+
+        Returns:
+            更新に成功した場合は True、ボタン未検出などで適用できなかった場合は False。
+        """
+        button = self.buttons.get(button_name)
+        if not button:
+            print(f"[DEBUG] presenter側でボタン未検出: {button_name}, keys={list(self.buttons.keys())}")
+            return False
+
+        def apply_state():
+            before_state = getattr(button, "cget", lambda x: None)("state")
+            command_attr = getattr(button, "_command", None)
+            try:
+                button.configure(state=desired_state)
+                if hasattr(button, "update_idletasks"):
+                    button.update_idletasks()
+                elif hasattr(button, "update"):
+                    button.update()
+            except Exception as exc:
+                print(f"[DEBUG] presenterでボタン状態更新失敗: {button_name} -> {desired_state}, error={exc}")
+                return
+            after_state = getattr(button, "cget", lambda x: None)("state")
+            print(f"[DEBUG] presenterボタン状態更新: {button_name} {before_state} -> {after_state}, command={command_attr}")
+
+        target = self._after_target or button
+        try:
+            if hasattr(target, "after"):
+                target.after(0, apply_state)
+                return True
+        except Exception as exc:
+            print(f"[DEBUG] presenter.after呼び出し失敗: {exc}")
+
+        # after が利用できない場合はフォールバックとして直接実行
+        try:
+            apply_state()
+            return True
+        except Exception as exc:
+            print(f"[DEBUG] presenter直接更新失敗: {button_name} -> {desired_state}, error={exc}")
+            return False

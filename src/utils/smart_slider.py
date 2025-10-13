@@ -200,6 +200,83 @@ class SmartSlider:
         return slider, value_label
     
     @staticmethod
+    def create_with_reset(
+        parent: ctk.CTkFrame,
+        text: str,
+        from_: Union[int, float],
+        to: Union[int, float],
+        default_value: Union[int, float],
+        command: Optional[Callable[[Union[int, float]], None]] = None,
+        value_format: str = "{:.0f}",
+        debounce_delay: float = 0.1,
+        value_type: type = int,
+        reset_text: str = "🔄 取消",
+        reset_width: int = 70,
+        reset_callback: Optional[Callable[[], None]] = None,
+    ) -> Tuple[ctk.CTkSlider, ctk.CTkLabel, ctk.CTkButton]:
+        """
+        タイトル・スライダー・値表示・取消ボタンを1行にまとめて生成するヘルパー
+        
+        Returns:
+            (スライダー, 値ラベル, 取消ボタン)
+        """
+        row_frame = ctk.CTkFrame(parent)
+        row_frame.pack(fill="x", padx=5, pady=(5, 2))
+        row_frame.grid_columnconfigure(1, weight=1)
+        
+        title_label = ctk.CTkLabel(row_frame, text=text, font=("Arial", 11))
+        title_label.grid(row=0, column=0, padx=(3, 8), pady=3, sticky="w")
+        
+        slider = ctk.CTkSlider(
+            row_frame,
+            from_=int(from_) if isinstance(from_, float) and from_.is_integer() else from_,
+            to=int(to) if isinstance(to, float) and to.is_integer() else to,
+            height=20
+        )
+        slider.grid(row=0, column=1, padx=(0, 8), pady=3, sticky="ew")
+        slider.set(default_value)
+        
+        value_label = ctk.CTkLabel(
+            row_frame,
+            text=value_format.format(default_value),
+            font=("Arial", 10),
+            width=50,
+            anchor="e"
+        )
+        value_label.grid(row=0, column=2, padx=(0, 8), pady=3, sticky="e")
+        
+        smart_instance = SmartSlider(
+            slider=slider,
+            label=value_label,
+            min_value=from_,
+            max_value=to,
+            value_type=value_type,
+            debounce_delay=debounce_delay,
+            value_format=value_format,
+            callback=command
+        )
+        smart_instance.set_value(default_value)
+        setattr(slider, "default_value", default_value)
+        
+        def _reset_action():
+            smart_instance.set_value(default_value)
+            if smart_instance.callback:
+                smart_instance.callback(default_value)
+            if reset_callback:
+                reset_callback()
+        
+        reset_button = ctk.CTkButton(
+            row_frame,
+            text=reset_text,
+            command=_reset_action,
+            width=reset_width,
+            font=("Arial", 11)
+        )
+        reset_button.grid(row=0, column=3, padx=(0, 3), pady=3, sticky="e")
+        
+        return slider, value_label, reset_button
+    
+    @staticmethod
     def cleanup_all() -> None:
         """全てのSmartSliderインスタンスをクリーンアップ"""
         for instance in SmartSlider._active_instances[:]:  # コピーを作成してイテレート
