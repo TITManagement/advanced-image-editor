@@ -18,6 +18,20 @@
 - インストール: `pip install -e .[dev]`
 - 開発ツール: `black`, `flake8`, `pytest` など
 
+### Pythonバージョンを切り替える手順
+
+1. `pyenv install <version>` で必要な Python を導入（例: `pyenv install 3.10.14`）。
+2. プロジェクト直下で `pyenv local <version>` を実行し、使用するバージョンを固定。
+3. `python --version` が 3.10 もしくは 3.11 になっていることを確認（3.13 以上では互換ホイールが提供されません）。
+4. セットアップスクリプトで仮想環境を再構築:  
+   ```
+   python scripts/setup_dev_environment.py --recreate-venv --extras dev
+   ```
+
+スクリプトが `.venv_advanced_image_editor`（`--venv-path` で変更可）を作り直し、`pip`/`setuptools`/`wheel` の更新、NumPy・Torch・Torchvision・OpenCV・Real-ESRGAN を既知の安定バージョンへ固定したうえでプロジェクトを `-e .[dev]` でインストールします。追加の extras が不要な場合は `--extras` オプションを省略してください。
+
+`pyenv which python` や `which python` を確認すると、ディレクトリに入った際に想定したバージョンが選択されているかを簡単にチェックできます。
+
 ## プロジェクト内自作ライブラリ一覧・設計補足
 
 このプロジェクトは、拡張性・保守性・テスタビリティを重視した独自モジュール構成となっています。下記は主要な自作ライブラリとその役割、設計上の依存関係です。
@@ -35,6 +49,7 @@
 | `editor.image_editor` | 画像の読み込み・保存・表示 | main_plugin |
 | `utils.image_utils` | 画像変換・フォーマット処理 | plugins, editor |
 | `utils.platform_utils` | クロスプラットフォーム対応・ファイルダイアログ | editor, ui |
+| `plugins.super_resolution.*` | SRResNet / Real-ESRGAN 等の汎用超解像ユーティリティ | フィルタープラグイン等、超解像を必要とする複数機能から参照 |
 
 ### 設計・依存関係の観点
 - **プラグインアーキテクチャ**：`core.plugin_base`を基底とし、各プラグインはこのクラスを継承。UIヘルパーも共通利用。
@@ -48,10 +63,18 @@
 src/
 ├── core/           # プラグイン基盤・ログ
 ├── plugins/        # 画像処理プラグイン群
+│   ├── filters/        # 各種フィルター UI/処理
+│   ├── super_resolution/  # 超解像ユーティリティ（Real-ESRGAN, SRResNet 等）
+│   └── ...              # そのほかのプラグイン
 ├── editor/         # 画像エディタ
 ├── ui/             # UI部品
 └── utils/          # ユーティリティ
 ```
+
+### super_resolution ディレクトリ配置の思想
+- **再利用可能なユーティリティとして独立**：Real-ESRGAN や OpenCV DNN の実装はフィルタープラグイン以外からも利用する余地があるため、`filters/` 直下ではなく `plugins/super_resolution/` として独立させています。これにより別プラグインや将来的な CLI/スタンドアロン用途でも使いやすくなります。
+- **ドキュメント/モデル資産を集約**：超解像に関する README やサンプルコード、モデルファイルをひとまとめに保管することで、フィルタープラグイン本体が肥大化せず保守性を保てます。
+- **依存の明確化**：フィルタープラグインは `plugins.super_resolution.super_resolution_standalone` をインポートするだけで機能を得る構造になっており、同じユーティリティを別プラグインへ展開するときも import 先を揃えるだけで済みます。
 
 ## プラグイン開発
 

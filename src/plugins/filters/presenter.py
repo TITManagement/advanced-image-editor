@@ -27,6 +27,7 @@ class FilterProcessingPresenter:
         self.buttons: Dict[str, Any] = {}
         self._container: Optional[ctk.CTkFrame] = None
         self._after_target: Optional[Any] = None
+        self.status_label: Optional[ctk.CTkLabel] = None
 
     def build(self, parent: ctk.CTkFrame) -> None:
         """
@@ -77,6 +78,8 @@ class FilterProcessingPresenter:
             ("denoise", "ノイズ除去"),
             ("emboss", "エンボス"),
             ("edge", "エッジ検出"),
+            ("opencv_dnn_sr", "OpenCV DNN超解像"),
+            ("real_esrgan_sr", "Real-ESRGAN"),
         ])
 
         # モルフォロジー演算
@@ -160,6 +163,15 @@ class FilterProcessingPresenter:
         undo_contour.configure(state=ctk.DISABLED)
         self.buttons['undo_contour'] = undo_contour
 
+        # ステータスメッセージ表示
+        self.status_label = ctk.CTkLabel(
+            parent,
+            text="準備完了",
+            anchor="w",
+            text_color=("gray70", "gray40"),
+        )
+        self.status_label.pack(fill="x", padx=5, pady=(8, 0))
+
         # プラグインに UI 要素を引き渡す
         self.plugin.attach_ui(self.sliders, self.labels, self.buttons)
 
@@ -169,13 +181,30 @@ class FilterProcessingPresenter:
             row = ctk.CTkFrame(parent)
             row.pack(fill="x", padx=5, pady=2)
 
-            apply_btn = PluginUIHelper.create_button(
-                row,
-                text=text,
-                command=lambda ft=filter_type: self.plugin._apply_special_filter(ft),
-                width=100,
-                auto_pack=False
-            )
+            if filter_type == "opencv_dnn_sr":
+                apply_btn = PluginUIHelper.create_button(
+                    row,
+                    text=text,
+                    command=self.plugin._apply_opencv_dnn_sr,
+                    width=100,
+                    auto_pack=False
+                )
+            elif filter_type == "real_esrgan_sr":
+                apply_btn = PluginUIHelper.create_button(
+                    row,
+                    text=text,
+                    command=self.plugin._apply_real_esrgan_sr,
+                    width=100,
+                    auto_pack=False
+                )
+            else:
+                apply_btn = PluginUIHelper.create_button(
+                    row,
+                    text=text,
+                    command=lambda ft=filter_type: self.plugin._apply_special_filter(ft),
+                    width=100,
+                    auto_pack=False
+                )
             apply_btn.pack(side="left", padx=(0, 5), pady=3)
             self.buttons[filter_type] = apply_btn
 
@@ -189,6 +218,32 @@ class FilterProcessingPresenter:
             undo_btn.pack(side="left", pady=3)
             undo_btn.configure(state=ctk.DISABLED)
             self.buttons[f"undo_{filter_type}"] = undo_btn
+
+    def set_status(self, message: str, state: str = "info") -> None:
+        """
+        ステータスラベルにメッセージを表示。
+
+        Args:
+            message: 表示するテキスト
+            state: 表示状態 (idle/info/processing/success/error)
+        """
+        if not self.status_label:
+            return
+
+        palette = {
+            "idle": ("gray70", "gray40"),
+            "info": ("gray70", "gray40"),
+            "processing": ("#fcd37d", "#ffb347"),
+            "success": ("#72c472", "#4caf50"),
+            "error": ("#f28b82", "#e57373"),
+        }
+        text_color = palette.get(state, palette["info"])
+        try:
+            self.status_label.configure(text=message, text_color=text_color)
+            if hasattr(self.status_label, "update_idletasks"):
+                self.status_label.update_idletasks()
+        except Exception as exc:
+            print(f"[DEBUG] ステータス更新失敗: {message} ({state}), error={exc}")
 
     def set_button_state(self, button_name: str, desired_state: str) -> bool:
         """
