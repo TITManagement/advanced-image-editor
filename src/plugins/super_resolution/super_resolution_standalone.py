@@ -190,6 +190,8 @@ def _create_realesrgan_upsampler(
     model_name: str,
     device: "torch.device",
     scale: float = 4.0,
+    tile_size: int = 0,
+    tile_pad: int = 10,
 ):
     """
     Build a RealESRGANer using known pretrained weights.
@@ -228,11 +230,14 @@ def _create_realesrgan_upsampler(
         )
 
     tile_size = 0 if torch.cuda.is_available() else 256
-    tile_size = 0 if torch.cuda.is_available() else 256
+    tile_size = int(max(0, tile_size))
+    if tile_size <= 0 and not torch.cuda.is_available():
+        tile_size = 256
     logger.info(
-        "[Real-ESRGAN] Using model '%s' (tile=%s, scale=%.2f, device=%s)",
+        "[Real-ESRGAN] Using model '%s' (tile=%s, pad=%d, scale=%.2f, device=%s)",
         model_name,
         tile_size if tile_size > 0 else "full-frame",
+        tile_pad,
         scale,
         device,
     )
@@ -243,7 +248,7 @@ def _create_realesrgan_upsampler(
         model_path=model_path,
         model=net,
         tile=tile_size,
-        tile_pad=10,
+        tile_pad=int(max(0, tile_pad)),
         pre_pad=0,
         half=False,
         device=device,
@@ -401,11 +406,20 @@ def create_super_resolution(model_path: str, device: Optional[str] = None) -> Su
 class OpenCVDNNSuperResolution:
     """Simple wrapper around cv2.dnn_superres for PB models shipped by OpenCV."""
 
-    def __init__(self, model_name: str = "EDSR", scale: int = 2, model_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        model_name: str = "EDSR",
+        scale: int = 2,
+        model_path: Optional[str] = None,
+        tile_size: int = 0,
+        tile_pad: int = 16,
+    ) -> None:
         _ensure_opencv()
         self.sr = cv2.dnn_superres.DnnSuperResImpl_create()
         self.model_name = model_name.lower()
         self.scale = scale
+        self.tile_size = max(0, int(tile_size))
+        self.tile_pad = max(0, int(tile_pad))
         self.model_path = self._resolve_model_path(model_path)
         self.sr.readModel(str(self.model_path))
         self.sr.setModel(self.model_name, self.scale)
@@ -448,13 +462,87 @@ class OpenCVDNNSuperResolution:
         )
 
     def enhance(self, image: np.ndarray) -> np.ndarray:
-        return self.sr.upsample(image)
+        if self.tile_size <= 0:
+            return self.sr.upsample(image)
+        return self._enhance_tiled(image, self.tile_size, self.tile_pad)
+
+    def _enhance_tiled(self, image: np.ndarray, tile_size: int, tile_pad: int) -> np.ndarray:
+        h, w = image.shape[:2]
+        scale = self.scale
+        result = np.zeros((h * scale, w * scale, 3), dtype=np.uint8)
+
+        tiles_x = math.ceil(w / tile_size)
+        tiles_y = math.ceil(h / tile_size)
+        total_tiles = tiles_x * tiles_y
+        logger.info(
+            "[OpenCV DNN] Tiled inference start (tile=%d, pad=%d, tiles=%d, image=%dx%d, scale=%d)",
+            tile_size,
+            tile_pad,
+            total_tiles,
+            w,
+            h,
+            scale,
+        )
+
+        tile_index = 0
+        for top in range(0, h, tile_size):
+            for left in range(0, w, tile_size):
+                tile_index += 1
+                bottom = min(top + tile_size, h)
+                right = min(left + tile_size, w)
+
+                pad_top = max(top - tile_pad, 0)
+                pad_bottom = min(bottom + tile_pad, h)
+                pad_left = max(left - tile_pad, 0)
+                pad_right = min(right + tile_pad, w)
+
+                tile = image[pad_top:pad_bottom, pad_left:pad_right]
+                logger.info(
+                    "[OpenCV DNN] Tile %d/%d (x:%d-%d, y:%d-%d)",
+                    tile_index,
+                    total_tiles,
+                    pad_left,
+                    pad_right,
+                    pad_top,
+                    pad_bottom,
+                )
+
+                upscaled_tile = self.sr.upsample(tile)
+
+                inner_top = (top - pad_top) * scale
+                inner_left = (left - pad_left) * scale
+                inner_bottom = inner_top + (bottom - top) * scale
+                inner_right = inner_left + (right - left) * scale
+
+                out_top = top * scale
+                out_left = left * scale
+                out_bottom = bottom * scale
+                out_right = right * scale
+
+                result[out_top:out_bottom, out_left:out_right] = upscaled_tile[
+                    inner_top:inner_bottom,
+                    inner_left:inner_right,
+                ]
+
+        logger.info("[OpenCV DNN] Tiled inference complete")
+        return result
 
 
 def opencv_dnn_super_resolution(
-    image: np.ndarray, model_name: str = "EDSR", scale: int = 2, model_path: Optional[str] = None
+    image: np.ndarray,
+    model_name: str = "EDSR",
+    scale: int = 2,
+    model_path: Optional[str] = None,
+    tile_size: int = 0,
+    tile_pad: int = 16,
 ) -> np.ndarray:
-    sr = OpenCVDNNSuperResolution(model_name, scale, model_path)
+    sr = OpenCVDNNSuperResolution(
+        model_name=model_name,
+        scale=scale,
+        model_path=model_path,
+        tile_size=tile_size,
+        tile_pad=tile_pad,
+    )
     return sr.enhance(image)
 
 
@@ -569,6 +657,8 @@ def real_esrgan_super_resolution(
     scale: int = 2,
     device: str = "cpu",
     model_name: str = "RealESRGAN_x4plus",
+    tile_size: int = 256,
+    tile_pad: int = 10,
 ) -> np.ndarray:
     """
     Run Real-ESRGAN via the optional realesrgan package.
@@ -586,7 +676,13 @@ def real_esrgan_super_resolution(
     import torch  # Local import to keep dependency optional
 
     device_torch = torch.device(device)
-    upsampler, outscale = _create_realesrgan_upsampler(model_name, device_torch, scale=scale)
+    upsampler, outscale = _create_realesrgan_upsampler(
+        model_name,
+        device_torch,
+        scale=scale,
+        tile_size=tile_size,
+        tile_pad=tile_pad,
+    )
     result_bgr, _ = upsampler.enhance(image, outscale=outscale)
     return result_bgr
 

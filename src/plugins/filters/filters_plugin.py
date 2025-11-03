@@ -69,14 +69,19 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self._opencv_sr_model_name = "EDSR"
         self._opencv_sr_scale = 2
         self._opencv_sr_model_path: Optional[str] = None
+        self._opencv_sr_tile_size = 256
+        self._opencv_sr_tile_pad = 16
         self._real_esrgan_scale = 2
         self._real_esrgan_device = "cpu"
         self._real_esrgan_model_name = "RealESRGAN_x4plus"
+        self._real_esrgan_tile_size = 256
+        self._real_esrgan_tile_pad = 10
         
         # --- UI要素辞書 ---
         self._sliders: Dict[str, Any] = {}
         self._labels: Dict[str, Any] = {}
         self._buttons: Dict[str, Any] = {}
+        self._selectors: Dict[str, Any] = {}
         self._pending_button_states: Dict[str, str] = {}
         
         # Presenter
@@ -154,12 +159,58 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             self.presenter = FilterProcessingPresenter(self)
         self.presenter.build(parent)
 
-    def attach_ui(self, sliders: Dict[str, Any], labels: Dict[str, Any], buttons: Dict[str, Any]) -> None:
+    def attach_ui(
+        self,
+        sliders: Dict[str, Any],
+        labels: Dict[str, Any],
+        buttons: Dict[str, Any],
+        selectors: Optional[Dict[str, Any]] = None,
+    ) -> None:
         self._sliders = sliders
         self._labels = labels
         self._buttons = buttons
+        self._selectors = selectors or {}
         self._apply_pending_button_states()
-    
+        self._sync_super_resolution_controls()
+
+    def _sync_super_resolution_controls(self) -> None:
+        """UI コントロールを現在の超解像パラメータと同期させる"""
+        if slider := self._sliders.get("opencv_scale"):
+            try:
+                slider.set(self._opencv_sr_scale)
+            except Exception:
+                pass
+            self._update_value_label("opencv_scale", self._opencv_sr_scale)
+        if slider := self._sliders.get("opencv_tile"):
+            try:
+                slider.set(self._opencv_sr_tile_size)
+            except Exception:
+                pass
+            self._update_value_label("opencv_tile", self._opencv_sr_tile_size)
+        if slider := self._sliders.get("real_esr_scale"):
+            try:
+                slider.set(self._real_esrgan_scale)
+            except Exception:
+                pass
+            self._update_value_label("real_esr_scale", self._real_esrgan_scale)
+        if slider := self._sliders.get("real_esr_tile"):
+            try:
+                slider.set(self._real_esrgan_tile_size)
+            except Exception:
+                pass
+            self._update_value_label("real_esr_tile", self._real_esrgan_tile_size)
+
+        if selector := self._selectors.get("opencv_model"):
+            try:
+                selector.set(self._opencv_sr_model_name.upper())
+            except Exception:
+                pass
+        if selector := self._selectors.get("real_esr_model"):
+            try:
+                selector.set(self._real_esrgan_model_name)
+            except Exception:
+                pass
+
     def create_ui(self, parent) -> None:
         """古い呼び出し互換: Presenter 経由で UI を構築"""
         self.setup_ui(parent)
@@ -267,6 +318,8 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
                 model_name=self._opencv_sr_model_name,
                 scale=self._opencv_sr_scale,
                 model_path=self._opencv_sr_model_path,
+                tile_size=self._opencv_sr_tile_size,
+                tile_pad=self._opencv_sr_tile_pad,
             )
         except FileNotFoundError as exc:
             print(f"{label} モデルファイルが見つかりません: {exc}")
@@ -296,6 +349,8 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
                 scale=self._real_esrgan_scale,
                 device=self._real_esrgan_device,
                 model_name=self._real_esrgan_model_name,
+                tile_size=self._real_esrgan_tile_size,
+                tile_pad=self._real_esrgan_tile_pad,
             )
         except ImportError as exc:
             print(f"{label} ライブラリが利用できません: {exc}")
@@ -314,47 +369,6 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self._current_filter = "real_esrgan_sr"
         self._applied_special_filter = "real_esrgan_sr"
         self._enable_undo_button("undo_real_esrgan_sr")
-        
-        # エンボスセクション
-        emboss_section = ctk.CTkFrame(filter_frame)
-        emboss_section.pack(fill="x", padx=5, pady=3)
-        
-        self._buttons['emboss'] = PluginUIHelper.create_button(
-            emboss_section,
-            text="エンボス",
-            command=lambda: self._apply_special_filter("emboss"),
-            width=100
-        )
-        self._buttons['emboss'].pack(side="left", padx=(0, 5))
-        
-        self._buttons['undo_emboss'] = PluginUIHelper.create_button(
-            emboss_section,
-            text="🔄 取消",
-            command=lambda: self._undo_special_filter("emboss"),
-            width=60
-        )
-        self._buttons['undo_emboss'].pack(side="left")
-        self._buttons['undo_emboss'].configure(state="disabled")
-        
-        # エッジ検出セクション
-        edge_section = ctk.CTkFrame(filter_frame)
-        edge_section.pack(fill="x", padx=5, pady=3)
-        
-        self._buttons['edge'] = PluginUIHelper.create_button(
-            edge_section,
-            text="エッジ検出",
-            command=lambda: self._apply_special_filter("edge"),
-            width=100
-        )
-        self._buttons['edge'].pack(side="left", padx=(0, 5))
-        
-        self._buttons['undo_edge'] = PluginUIHelper.create_button(
-            edge_section,
-            text="🔄 取消",
-            command=lambda: self._undo_special_filter("edge"),
-            width=60
-        )
-        self._buttons['undo_edge'].pack(side="left")
         self._buttons['undo_edge'].configure(state="disabled")
         
         # モルフォロジー演算セクション
@@ -482,6 +496,58 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         # 奇数にする
         self._morph_kernel_size = kernel_size if kernel_size % 2 == 1 else kernel_size + 1
         self._on_parameter_change()
+
+    def _on_opencv_model_change(self, choice: str) -> None:
+        """OpenCV DNN モデル選択"""
+        normalized = choice.strip().lower()
+        if normalized not in {"edsr", "fsrcnn", "lapsrn", "espcn"}:
+            self._set_status(f"[OpenCV DNN] 未対応のモデル: {choice}", "error")
+            return
+        if normalized != self._opencv_sr_model_name:
+            self._opencv_sr_model_name = normalized
+            self._set_status(f"[OpenCV DNN] モデルを {choice} に設定しました", "info")
+
+    def _on_opencv_scale_change(self, value: float) -> None:
+        """OpenCV DNN スケール変更"""
+        scale = max(1, min(4, int(round(value))))
+        if scale != self._opencv_sr_scale:
+            self._opencv_sr_scale = scale
+            self._set_status(f"[OpenCV DNN] スケールを x{scale} に設定しました", "info")
+        self._update_value_label("opencv_scale", scale)
+
+    def _on_opencv_tile_change(self, value: float) -> None:
+        """OpenCV DNN タイルサイズ変更 (CPU用)"""
+        tile = int(round(value / 32.0) * 32)
+        tile = max(0, min(512, tile))
+        if tile != self._opencv_sr_tile_size:
+            self._opencv_sr_tile_size = tile
+            mode = "全体処理" if tile == 0 else f"{tile}px"
+            self._set_status(f"[OpenCV DNN] タイルサイズ: {mode}", "info")
+        self._update_value_label("opencv_tile", self._opencv_sr_tile_size)
+
+    def _on_real_esrgan_model_change(self, choice: str) -> None:
+        """Real-ESRGAN モデル選択"""
+        if choice != self._real_esrgan_model_name:
+            self._real_esrgan_model_name = choice
+            self._set_status(f"[Real-ESRGAN] モデルを {choice} に設定しました", "info")
+
+    def _on_real_esrgan_scale_change(self, value: float) -> None:
+        """Real-ESRGAN スケール変更"""
+        scale = max(1, min(4, int(round(value))))
+        if scale != self._real_esrgan_scale:
+            self._real_esrgan_scale = scale
+            self._set_status(f"[Real-ESRGAN] スケールを x{scale} に設定しました", "info")
+        self._update_value_label("real_esr_scale", self._real_esrgan_scale)
+
+    def _on_real_esrgan_tile_change(self, value: float) -> None:
+        """Real-ESRGAN タイルサイズ変更 (CPU用)"""
+        tile = int(round(value / 32.0) * 32)
+        tile = max(0, min(512, tile))
+        if tile != self._real_esrgan_tile_size:
+            self._real_esrgan_tile_size = tile
+            mode = "全体処理" if tile == 0 else f"{tile}px"
+            self._set_status(f"[Real-ESRGAN] タイルサイズ: {mode}", "info")
+        self._update_value_label("real_esr_tile", self._real_esrgan_tile_size)
 
     # ===============================
     # 6. アクション・リセット処理

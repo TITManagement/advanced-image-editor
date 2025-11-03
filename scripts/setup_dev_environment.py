@@ -297,7 +297,8 @@ class CrossPlatformSetup:
             [
                 "install",
                 "--upgrade",
-                "opencv-python==4.10.0.84",
+                "--no-deps",
+                "opencv-contrib-python==4.10.0.84",
                 "realesrgan>=0.3.0",
             ],
         )
