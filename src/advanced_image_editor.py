@@ -271,6 +271,10 @@ class AdvancedImageEditor(ctk.CTk):
                 if hasattr(plugin_instance, 'set_update_image_callback'):
                     plugin_instance.set_update_image_callback(self.image_editor.update_current_image)
                     debug_print("   ✓ density_adjustment: update_image_callback 設定完了")
+            if plugin_instance.name == 'filter_processing' and hasattr(self.image_editor, 'update_current_image'):
+                if hasattr(plugin_instance, 'set_update_image_callback'):
+                    plugin_instance.set_update_image_callback(self.image_editor.update_current_image)
+                    debug_print("   ✓ filter_processing: update_image_callback 設定完了")
 
         # HistogramAnalysisPlugin は補助プラグインのため手動登録
         histogram_plugin_instance = None
@@ -464,6 +468,11 @@ class AdvancedImageEditor(ctk.CTk):
             density_plugin = self.plugin_manager.get_plugin('density_adjustment')
             if density_plugin and hasattr(density_plugin, 'set_image'):
                 density_plugin.set_image(current_image)
+            filter_plugin = self.plugin_manager.get_plugin('filter_processing')
+            if filter_plugin and hasattr(filter_plugin, 'set_image'):
+                filter_plugin.set_image(current_image)
+                if hasattr(filter_plugin, 'set_update_image_callback'):
+                    filter_plugin.set_update_image_callback(self.image_editor.update_current_image)
         debug_print("全プラグイン初期化完了")
     
     def apply_all_adjustments(self):

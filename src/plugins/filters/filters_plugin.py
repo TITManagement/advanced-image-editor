@@ -1,3 +1,5 @@
+from plugins.super_resolution.super_resolution_standalone import opencv_dnn_super_resolution, real_esrgan_super_resolution
+
 #!/usr/bin/env python3
 """
 フィルター処理プラグイン - Filter Processing Plugin
@@ -11,6 +13,7 @@ from PIL import Image, ImageFilter
 import customtkinter as ctk
 import threading
 from typing import Dict, Any, Optional
+from plugins.super_resolution.super_resolution_standalone import SuperResolution, create_super_resolution
 
 # 相対インポートでcore moduleを使用
 import sys
@@ -58,6 +61,17 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         self._applied_special_filter = None
         self._applied_morphology = None
         self._applied_contour = False
+        self._current_image: Optional[Image.Image] = None
+        self._original_image: Optional[Image.Image] = None
+        self._update_image_callback = None
+
+        # --- 超解像処理のデフォルト設定 ---
+        self._opencv_sr_model_name = "EDSR"
+        self._opencv_sr_scale = 2
+        self._opencv_sr_model_path: Optional[str] = None
+        self._real_esrgan_scale = 2
+        self._real_esrgan_device = "cpu"
+        self._real_esrgan_model_name = "RealESRGAN_x4plus"
         
         # --- UI要素辞書 ---
         self._sliders: Dict[str, Any] = {}
@@ -91,6 +105,18 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     # 2. コールバック設定（外部API）
     # ===============================
     
+    def set_image(self, image: Image.Image) -> None:
+        """表示中の画像を保持"""
+        if image is None:
+            return
+        self._original_image = image
+        self._current_image = image
+        self._set_status("画像を受け取りました", "info")
+
+    def set_update_image_callback(self, callback) -> None:
+        """画像更新コールバックを登録"""
+        self._update_image_callback = callback
+
     def set_parameter_change_callback(self, callback):
         """パラメータ変更用のコールバックを設定"""
         self._parameter_change_callback = callback
@@ -189,6 +215,105 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
         )
         self._buttons['undo_denoise'].pack(side="left")
         self._buttons['undo_denoise'].configure(state="disabled")
+
+        # 超解像セクション
+        sr_section = ctk.CTkFrame(filter_frame)
+        sr_section.pack(fill="x", padx=5, pady=3)
+
+        self._buttons['super_resolution'] = PluginUIHelper.create_button(
+            sr_section,
+            text="超解像",
+            command=self._apply_super_resolution,
+            width=100
+        )
+        self._buttons['super_resolution'].pack(side="left", padx=(0, 5))
+
+    def _apply_super_resolution(self):
+        """SRResNetベースの超解像処理を実行"""
+        label = "[超解像]"
+        model_path = "model_srresnet.pth"  # TODO: 設定化する
+        image_bgr = self._get_current_image_bgr(label)
+        if image_bgr is None:
+            return
+        self._set_status("SRResNet超解像を実行中...", "processing")
+
+        try:
+            sr = create_super_resolution(model_path)
+            enhanced_bgr = sr.enhance_image(image_bgr, scale=2.0)
+        except FileNotFoundError as exc:
+            print(f"{label} モデルファイルが見つかりません: {exc}")
+            self._set_status(f"{label} モデルファイルが見つかりません", "error")
+            return
+        except Exception as exc:
+            print(f"{label} エラー: {exc}")
+            self._set_status(f"{label} エラー: {exc}", "error")
+            return
+
+        self._update_current_image_from_bgr(enhanced_bgr, label, "処理完了", "success")
+        self._current_filter = "super_resolution"
+        self._applied_special_filter = "super_resolution"
+
+    def _apply_opencv_dnn_sr(self) -> None:
+        """OpenCV DNN Super Resolution を利用した超解像を実行"""
+        label = "[OpenCV DNN超解像]"
+        image_bgr = self._get_current_image_bgr(label)
+        if image_bgr is None:
+            return
+        self._set_status("OpenCV DNN超解像を実行中...", "processing")
+
+        try:
+            enhanced_bgr = opencv_dnn_super_resolution(
+                image_bgr,
+                model_name=self._opencv_sr_model_name,
+                scale=self._opencv_sr_scale,
+                model_path=self._opencv_sr_model_path,
+            )
+        except FileNotFoundError as exc:
+            print(f"{label} モデルファイルが見つかりません: {exc}")
+            self._set_status(f"{label} モデルファイルが見つかりません", "error")
+            return
+        except Exception as exc:
+            print(f"{label} エラー: {exc}")
+            self._set_status(f"{label} エラー: {exc}", "error")
+            return
+
+        self._update_current_image_from_bgr(enhanced_bgr, label, "処理完了", "success")
+        self._current_filter = "opencv_dnn_sr"
+        self._applied_special_filter = "opencv_dnn_sr"
+        self._enable_undo_button("undo_opencv_dnn_sr")
+
+    def _apply_real_esrgan_sr(self) -> None:
+        """Real-ESRGAN を利用した超解像を実行"""
+        label = "[Real-ESRGAN]"
+        image_bgr = self._get_current_image_bgr(label)
+        if image_bgr is None:
+            return
+        self._set_status("Real-ESRGAN超解像を実行中...", "processing")
+
+        try:
+            enhanced_bgr = real_esrgan_super_resolution(
+                image_bgr,
+                scale=self._real_esrgan_scale,
+                device=self._real_esrgan_device,
+                model_name=self._real_esrgan_model_name,
+            )
+        except ImportError as exc:
+            print(f"{label} ライブラリが利用できません: {exc}")
+            self._set_status(f"{label} ライブラリが利用できません: {exc}", "error")
+            return
+        except FileNotFoundError as exc:
+            print(f"{label} モデルファイルが見つかりません: {exc}")
+            self._set_status(f"{label} モデルファイルが見つかりません", "error")
+            return
+        except Exception as exc:
+            print(f"{label} エラー: {exc}")
+            self._set_status(f"{label} エラー: {exc}", "error")
+            return
+
+        self._update_current_image_from_bgr(enhanced_bgr, label, "処理完了", "success")
+        self._current_filter = "real_esrgan_sr"
+        self._applied_special_filter = "real_esrgan_sr"
+        self._enable_undo_button("undo_real_esrgan_sr")
         
         # エンボスセクション
         emboss_section = ctk.CTkFrame(filter_frame)
@@ -517,6 +642,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             
         try:
             processed_image = image.copy()
+            self._current_image = processed_image
             
             # ガウシアンブラーの適用
             processed_image = self._apply_gaussian_blur(processed_image)
@@ -524,6 +650,7 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
             # シャープニングの適用
             processed_image = self._apply_sharpening(processed_image)
             
+            self._current_image = processed_image
             return processed_image
             
         except Exception as e:
@@ -771,6 +898,71 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
     # ===============================
     
 
+    def _get_current_image_bgr(self, label: str) -> Optional[np.ndarray]:
+        """現在の画像をBGRのnumpy配列で取得"""
+        image = getattr(self, "_current_image", None)
+        if image is None:
+            print(f"{label} 現在の画像がありません")
+            self._set_status(f"{label} 現在の画像がありません", "error")
+            return None
+
+        if isinstance(image, Image.Image):
+            try:
+                return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+            except Exception as exc:
+                print(f"{label} 画像をBGR配列へ変換できません: {exc}")
+                self._set_status(f"{label} 画像を変換できません: {exc}", "error")
+                return None
+
+        if isinstance(image, np.ndarray):
+            if image.ndim == 3 and image.shape[2] == 3:
+                return image.copy()
+            print(f"{label} 未対応の画像配列形状: {image.shape}")
+            self._set_status(f"{label} 未対応の画像配列形状です", "error")
+            return None
+
+        print(f"{label} 未対応の画像タイプ: {type(image)}")
+        self._set_status(f"{label} 未対応の画像タイプです: {type(image).__name__}", "error")
+        return None
+
+    def _update_current_image_from_bgr(
+        self,
+        bgr_image: np.ndarray,
+        label: str,
+        success_message: str,
+        status_state: str = "success",
+    ) -> None:
+        """BGR配列から現在の画像を更新し、コールバックを呼び出す"""
+        try:
+            rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
+        except Exception as exc:
+            print(f"{label} 結果画像のRGB変換に失敗: {exc}")
+            self._set_status(f"{label} 結果画像のRGB変換に失敗: {exc}", "error")
+            return
+
+        try:
+            result_image = Image.fromarray(rgb_image)
+        except Exception as exc:
+            print(f"{label} 結果画像の生成に失敗: {exc}")
+            self._set_status(f"{label} 結果画像の生成に失敗: {exc}", "error")
+            return
+
+        self._current_image = result_image
+        print(f"{label} {success_message}")
+        self._set_status(f"{label} {success_message}", status_state)
+        if self._update_image_callback:
+            try:
+                self._update_image_callback(result_image)
+            except Exception as exc:
+                print(f"{label} 画像表示更新に失敗: {exc}")
+                self._set_status(f"{label} 画像表示更新に失敗: {exc}", "error")
+        if self._parameter_change_callback:
+            try:
+                self._parameter_change_callback()
+            except Exception as exc:
+                print(f"{label} パラメータ変更コールバック実行時にエラー: {exc}")
+                self._set_status(f"{label} コールバックでエラー: {exc}", "error")
+
     def _update_value_label(self, parameter: str, value) -> None:
         """値ラベルの更新"""
         if parameter in self._labels:
@@ -778,6 +970,16 @@ class FilterProcessingPlugin(ImageProcessorPlugin):
                 self._labels[parameter].configure(text=f"{value:.1f}")
             else:
                 self._labels[parameter].configure(text=f"{value:.0f}")
+
+    def _set_status(self, message: str, state: str = "info") -> None:
+        """Presenterのステータスラベルを更新"""
+        if self.presenter:
+            try:
+                self.presenter.set_status(message, state)
+                return
+            except Exception as exc:
+                print(f"[DEBUG] ステータス更新失敗 (presenter): {message}, error={exc}")
+        print(f"[STATUS] {message}")
     
     def _log_error(self, message: str) -> None:
         """エラーログの出力"""

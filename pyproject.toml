@@ -1,5 +1,5 @@
 [project]
-name = "advanced-image-editor"
+name = "advanced_image_editor"
 version = "1.1.0"
 description = "Advanced Image Editor with Plugin System - カーブエディタ完全1:1マッピング対応の高度な画像編集アプリケーション"
 readme = "README.md"
@@ -33,19 +33,25 @@ dependencies = [
     "darkdetect>=0.8.0",
     
     # Image Processing - クロスプラットフォーム対応
-    "opencv-python>=4.8.0",
+    "opencv-python==4.10.0.84",
     "pillow>=10.0.0",
-    "numpy>=1.24.0",
+    "numpy>=1.24.0,<2.0",
     
     # Scientific Computing
     "scipy>=1.10.0",
-    
+
     # Utilities
     "packaging>=23.0",
+    "matplotlib>=3.8.0",
     
     # プラットフォーム固有の依存関係
     "platformdirs>=3.0.0",  # OS固有のディレクトリ管理
     "psutil>=5.9.0",        # システム情報取得（メモリ・CPU監視）
+
+    # Deep Learning (Super Resolution)
+    "torch==2.1.2",
+    "torchvision==0.16.2",
+    "realesrgan>=0.3.0",
 ]
 
 # Development dependencies for gui_framework

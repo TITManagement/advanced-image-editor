@@ -23,6 +23,7 @@ MANIFEST
 
 # Virtual Environments
 .venv/
+.venv_advanced_image_editor/
 env/
 venv/
 ENV/
