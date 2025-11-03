@@ -25,6 +25,7 @@ class FilterProcessingPresenter:
         self.sliders: Dict[str, Any] = {}
         self.labels: Dict[str, Any] = {}
         self.buttons: Dict[str, Any] = {}
+        self.selectors: Dict[str, Any] = {}
         self._container: Optional[ctk.CTkFrame] = None
         self._after_target: Optional[Any] = None
         self.status_label: Optional[ctk.CTkLabel] = None
@@ -36,6 +37,7 @@ class FilterProcessingPresenter:
         self.sliders.clear()
         self.labels.clear()
         self.buttons.clear()
+        self.selectors.clear()
         self._container = parent
         self._after_target = parent  # CTkFrame は after を継承している
 
@@ -81,6 +83,106 @@ class FilterProcessingPresenter:
             ("opencv_dnn_sr", "OpenCV DNN超解像"),
             ("real_esrgan_sr", "Real-ESRGAN"),
         ])
+
+        # 超解像設定
+        sr_config_frame = ctk.CTkFrame(parent)
+        sr_config_frame.pack(fill="x", padx=5, pady=5)
+        ctk.CTkLabel(sr_config_frame, text="超解像設定", font=("Arial", 11)).pack(anchor="w", padx=3, pady=(5, 0))
+
+        # OpenCV DNN 設定
+        opencv_frame = ctk.CTkFrame(sr_config_frame)
+        opencv_frame.pack(fill="x", padx=5, pady=3)
+        ctk.CTkLabel(opencv_frame, text="OpenCV DNN", font=("Arial", 10)).pack(anchor="w", padx=3, pady=(3, 0))
+
+        opencv_model_row = ctk.CTkFrame(opencv_frame)
+        opencv_model_row.pack(fill="x", padx=5, pady=3)
+        ctk.CTkLabel(opencv_model_row, text="モデル", width=80, anchor="w").pack(side="left", padx=(0, 8))
+        opencv_models = ["EDSR", "FSRCNN", "LapSRN", "ESPCN"]
+        opencv_model_menu = ctk.CTkOptionMenu(
+            opencv_model_row,
+            values=opencv_models,
+            command=self.plugin._on_opencv_model_change,
+            width=140,
+        )
+        opencv_model_menu.pack(side="left", fill="x", expand=True)
+        opencv_model_menu.set(self.plugin._opencv_sr_model_name.upper())
+        self.selectors["opencv_model"] = opencv_model_menu
+
+        opencv_scale_slider, opencv_scale_label = PluginUIHelper.create_slider_row(
+            parent=opencv_frame,
+            text="スケール",
+            from_=1,
+            to=4,
+            default_value=self.plugin._opencv_sr_scale,
+            command=self.plugin._on_opencv_scale_change,
+            value_format="{:.0f}",
+            value_type=int,
+        )
+        self.sliders["opencv_scale"] = opencv_scale_slider
+        self.labels["opencv_scale"] = opencv_scale_label
+
+        opencv_tile_slider, opencv_tile_label = PluginUIHelper.create_slider_row(
+            parent=opencv_frame,
+            text="タイルサイズ (CPU)",
+            from_=0,
+            to=512,
+            default_value=self.plugin._opencv_sr_tile_size,
+            command=self.plugin._on_opencv_tile_change,
+            value_format="{:.0f}",
+            value_type=int,
+        )
+        self.sliders["opencv_tile"] = opencv_tile_slider
+        self.labels["opencv_tile"] = opencv_tile_label
+
+        # Real-ESRGAN 設定
+        realesr_frame = ctk.CTkFrame(sr_config_frame)
+        realesr_frame.pack(fill="x", padx=5, pady=3)
+        ctk.CTkLabel(realesr_frame, text="Real-ESRGAN", font=("Arial", 10)).pack(anchor="w", padx=3, pady=(3, 0))
+
+        real_model_row = ctk.CTkFrame(realesr_frame)
+        real_model_row.pack(fill="x", padx=5, pady=3)
+        ctk.CTkLabel(real_model_row, text="モデル", width=80, anchor="w").pack(side="left", padx=(0, 8))
+        real_models = [
+            "RealESRGAN_x4plus",
+            "RealESRGAN_x4plus_anime_6B",
+            "RealESRGAN_x2plus",
+            "RealESRNet_x4plus",
+        ]
+        real_model_menu = ctk.CTkOptionMenu(
+            real_model_row,
+            values=real_models,
+            command=self.plugin._on_real_esrgan_model_change,
+            width=200,
+        )
+        real_model_menu.pack(side="left", fill="x", expand=True)
+        real_model_menu.set(self.plugin._real_esrgan_model_name)
+        self.selectors["real_esr_model"] = real_model_menu
+
+        real_scale_slider, real_scale_label = PluginUIHelper.create_slider_row(
+            parent=realesr_frame,
+            text="スケール",
+            from_=1,
+            to=4,
+            default_value=self.plugin._real_esrgan_scale,
+            command=self.plugin._on_real_esrgan_scale_change,
+            value_format="{:.0f}",
+            value_type=int,
+        )
+        self.sliders["real_esr_scale"] = real_scale_slider
+        self.labels["real_esr_scale"] = real_scale_label
+
+        real_tile_slider, real_tile_label = PluginUIHelper.create_slider_row(
+            parent=realesr_frame,
+            text="タイルサイズ (CPU)",
+            from_=0,
+            to=512,
+            default_value=self.plugin._real_esrgan_tile_size,
+            command=self.plugin._on_real_esrgan_tile_change,
+            value_format="{:.0f}",
+            value_type=int,
+        )
+        self.sliders["real_esr_tile"] = real_tile_slider
+        self.labels["real_esr_tile"] = real_tile_label
 
         # モルフォロジー演算
         morph_frame = ctk.CTkFrame(parent)
@@ -173,7 +275,7 @@ class FilterProcessingPresenter:
         self.status_label.pack(fill="x", padx=5, pady=(8, 0))
 
         # プラグインに UI 要素を引き渡す
-        self.plugin.attach_ui(self.sliders, self.labels, self.buttons)
+        self.plugin.attach_ui(self.sliders, self.labels, self.buttons, self.selectors)
 
     def _create_special_filter_buttons(self, parent: ctk.CTkFrame, filters: list[tuple[str, str]]) -> None:
         """特殊フィルター用の適用・取消ボタン行を生成する。"""

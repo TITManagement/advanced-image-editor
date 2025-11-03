@@ -33,7 +33,7 @@ dependencies = [
     "darkdetect>=0.8.0",
     
     # Image Processing - クロスプラットフォーム対応
-    "opencv-python==4.10.0.84",
+    "opencv-contrib-python==4.10.0.84",
     "pillow>=10.0.0",
     "numpy>=1.24.0,<2.0",
     
@@ -66,7 +66,6 @@ dev = [
 
 performance = [
     "numba>=0.57.0",
-    "opencv-contrib-python>=4.8.0",
 ]
 
 # Windows固有の依存関係
