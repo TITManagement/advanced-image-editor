@@ -1,6 +1,6 @@
 # Advanced Image Editor
 
-> 🔌 プラグインシステム対応の高度な画像編集アプリケーション
+> 🔌 llllllllll
 
 [![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)](https://github.com/TITManagement/advanced-image-editor)
@@ -26,10 +26,10 @@ python scripts/setup_dev_environment.py
 
 | 📖 **目的別ガイド** | 📝 **内容** |
 |-------------------|------------|
-| **[📖 ユーザーガイド](docs/USER_GUIDE.md)** | 使い方・操作方法・トラブルシューティング |
-| **[👨‍💻 開発者ガイド](docs/DEVELOPER_GUIDE.md)** | プラグイン開発・コントリビューション |
-| **[🏗️ アーキテクチャ](docs/ARCHITECTURE.md)** | システム設計・プラグインシステム |
-| **[⚡ 技術ノート](docs/TECHNICAL_NOTES.md)** | UIソリューション・最適化技術 |
+| **[📖 ユーザーガイド](docs/guide/USER_GUIDE.md)** | 使い方・操作方法・トラブルシューティング |
+| **[👨‍💻 開発者ガイド](docs/dev/DEVELOPER_GUIDE.md)** | プラグイン開発・コントリビューション |
+| **[🏗️ アーキテクチャ](docs/architecture/ARCHITECTURE.md)** | システム設計・プラグインシステム |
+| **[⚡ 技術ノート](docs/architecture/TECHNICAL_NOTES.md)** | UIソリューション・最適化技術 |
 
 ## ✨ 主な機能
 
@@ -48,10 +48,10 @@ python scripts/setup_dev_environment.py
 
 プロジェクトへの貢献を歓迎します！
 
-- **[開発者ガイド](docs/DEVELOPER_GUIDE.md)** - 開発環境の構築と基本的な開発フロー
-- **[設計指針](docs/DESIGN_PRINCIPLES.md)** - コード修正時の基本方針とベストプラクティス
-- **[SmartSliderガイド](docs/SMART_SLIDER_GUIDE.md)** - 統一されたスライダー拡張機能パッケージシステム
-- **[アーキテクチャ](docs/ARCHITECTURE.md)** - システム設計と技術詳細
+- **[開発者ガイド](docs/dev/DEVELOPER_GUIDE.md)** - 開発環境の構築と基本的な開発フロー
+- **[設計指針](docs/architecture/DESIGN_PRINCIPLES.md)** - コード修正時の基本方針とベストプラクティス
+- **[SmartSliderガイド](docs/dev/SMART_SLIDER_GUIDE.md)** - 統一されたスライダー拡張機能パッケージシステム
+- **[アーキテクチャ](docs/architecture/ARCHITECTURE.md)** - システム設計と技術詳細
 
 ## 📄 ライセンス
 

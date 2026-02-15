@@ -27,24 +27,24 @@ python scripts/setup_dev_environment.py
 ### 実行
 ```bash
 # 基本実行
-.venv/bin/python src/main_plugin.py
+.venv/bin/python src/advanced_image_editor.py
 
 # デバッグモード  
-.venv/bin/python src/main_plugin.py --debug
+.venv/bin/python src/advanced_image_editor.py --debug
 ```
 
 ## 📚 ドキュメント
 
 | 📖 ドキュメント | 🎯 対象読者 | 📝 内容 |
 |---------------|------------|--------|
-| [📱 ユーザーガイド](docs/USER_GUIDE.md) | エンドユーザー | 機能詳細・操作方法 |
-| [👨‍💻 開発者ガイド](docs/DEVELOPER_GUIDE.md) | プラグイン開発者 | プラグイン作成方法・API |
-| [🏗️ アーキテクチャ](docs/ARCHITECTURE.md) | 技術評価者 | 設計思想・技術選択 |
-| [🔧 技術ノート](docs/TECHNICAL_NOTES.md) | 実装者 | UIライブラリ対策・ノウハウ |
+| [📱 ユーザーガイド](../guide/USER_GUIDE.md) | エンドユーザー | 機能詳細・操作方法 |
+| [👨‍💻 開発者ガイド](../dev/DEVELOPER_GUIDE.md) | プラグイン開発者 | プラグイン作成方法・API |
+| [🏗️ アーキテクチャ](../architecture/ARCHITECTURE.md) | 技術評価者 | 設計思想・技術選択 |
+| [🔧 技術ノート](../architecture/TECHNICAL_NOTES.md) | 実装者 | UIライブラリ対策・ノウハウ |
 
 ## ⚡ 技術スタック
 
-- **Python 3.8+** (Cross-Platform)
+- **Python 3.9+** (Cross-Platform)
 - **CustomTkinter** (Modern GUI)
 - **OpenCV + Pillow** (Image Processing)
 
@@ -61,7 +61,7 @@ python scripts/setup_dev_environment.py
 ## 🤝 貢献
 
 プラグイン開発・機能改善の貢献を歓迎します！
-詳細は [👨‍💻 開発者ガイド](docs/DEVELOPER_GUIDE.md) をご覧ください。
+詳細は [👨‍💻 開発者ガイド](../dev/DEVELOPER_GUIDE.md) をご覧ください。
 
 ---
 

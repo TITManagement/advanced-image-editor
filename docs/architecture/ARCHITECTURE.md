@@ -1,6 +1,6 @@
 # アーキテクチャ設計 - Advanced Image Editor
 
-> 🏠 **メインハブ**: [README](../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](USER_GUIDE.md) | [開発者ガイド](DEVELOPER_GUIDE.md) | [技術ノート](TECHNICAL_NOTES.md)
+> 🏠 **メインハブ**: [README](../../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](../guide/USER_GUIDE.md) | [開発者ガイド](../dev/DEVELOPER_GUIDE.md) | [技術ノート](TECHNICAL_NOTES.md)
 
 ## 目次
 - [システム概要](#システム概要)
@@ -56,7 +56,7 @@ Advanced Image Editorは、**プラグインアーキテクチャ**を採用し�
 #### Application Layer（アプリケーション層）
 - **担当**: プラグイン管理、ワークフロー制御
 - **構成要素**:
-  - `main_plugin.py`: アプリケーション制御
+  - `advanced_image_editor.py`: アプリケーション制御
   - `core/plugin_base.py`: プラグイン基盤
   - プラグイン管理システム
 
@@ -418,14 +418,14 @@ src/
 │   ├── image_utils.py      # 画像処理ヘルパー
 │   ├── platform_utils.py   # プラットフォーム依存処理
 │   └── __init__.py
-└── main_plugin.py          # 🚀 アプリケーション起点
+└── advanced_image_editor.py # 🚀 アプリケーション起点
 ```
 
 ### モジュール間依存関係
 
 ```mermaid
 graph TD
-    A[main_plugin.py] --> B[ui/main_window.py]
+    A[advanced_image_editor.py] --> B[ui/main_window.py]
     A --> C[editor/image_editor.py]
     A --> D[core/plugin_base.py]
     
@@ -951,7 +951,7 @@ MATURITY_CHECKLIST = {
 この設計により、Advanced Image Editorは高い拡張性と保守性を持つ、スケーラブルなアーキテクチャを実現しています。
 
 **ナビゲーション**:
-- 🏠 [メインハブに戻る](../README.md)
-- 📖 [ユーザー向け機能詳細](USER_GUIDE.md)
-- 👨‍💻 [実装ガイドライン](DEVELOPER_GUIDE.md)
+- 🏠 [メインハブに戻る](../../README.md)
+- 📖 [ユーザー向け機能詳細](../guide/USER_GUIDE.md)
+- 👨‍💻 [実装ガイドライン](../dev/DEVELOPER_GUIDE.md)
 - ⚡ [具体的な技術ソリューション](TECHNICAL_NOTES.md)

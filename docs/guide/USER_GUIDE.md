@@ -1,6 +1,6 @@
 # ユーザーガイド - Advanced Image Editor
 
-> 🏠 **メインハブ**: [README](../README.md) へ戻る | **関連ドキュメント**: [開発者ガイド](DEVELOPER_GUIDE.md) | [アーキテクチャ](ARCHITECTURE.md) | [技術ノート](TECHNICAL_NOTES.md)
+> 🏠 **メインハブ**: [README](../../README.md) へ戻る | **関連ドキュメント**: [開発者ガイド](../dev/DEVELOPER_GUIDE.md) | [アーキテクチャ](../architecture/ARCHITECTURE.md) | [技術ノート](../architecture/TECHNICAL_NOTES.md)
 
 ## 目次
 - [基本的な使い方](#基本的な使い方)
@@ -15,10 +15,10 @@
 
 ```bash
 # 基本実行
-.venv/bin/python src/main_plugin.py
+.venv/bin/python src/advanced_image_editor.py
 
 # デバッグモード（詳細ログ表示）
-.venv/bin/python src/main_plugin.py --debug
+.venv/bin/python src/advanced_image_editor.py --debug
 ```
 
 ### 2. 画像の読み込み
@@ -243,7 +243,7 @@
 | "PIL cannot identify image file" | 非対応フォーマット | 対応形式で保存し直し |
 | "Permission denied" | 書き込み権限なし | 別フォルダに保存 |
 | "Memory error" | メモリ不足 | 画像サイズを縮小 |
-| "Module not found" | 依存関係不足 | `pip install -r requirements.txt` |
+| "Module not found" | 依存関係不足 | `pip install -e .`（必要に応じて `pip install -r requirements.txt`） |
 
 ### パフォーマンス最適化
 
@@ -262,7 +262,7 @@
 このガイドでAdvanced Image Editorを効果的に活用して、素晴らしい画像編集をお楽しみください！
 
 **ナビゲーション**:
-- 🏠 [メインハブに戻る](../README.md)
-- 👨‍💻 [プラグイン開発に興味がある方](DEVELOPER_GUIDE.md)
-- 🏗️ [システム設計について学ぶ](ARCHITECTURE.md)
-- ⚡ [技術的な詳細を確認](TECHNICAL_NOTES.md)
+- 🏠 [メインハブに戻る](../../README.md)
+- 👨‍💻 [プラグイン開発に興味がある方](../dev/DEVELOPER_GUIDE.md)
+- 🏗️ [システム設計について学ぶ](../architecture/ARCHITECTURE.md)
+- ⚡ [技術的な詳細を確認](../architecture/TECHNICAL_NOTES.md)

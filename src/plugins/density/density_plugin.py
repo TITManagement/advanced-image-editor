@@ -431,6 +431,8 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         self.temperature_value = 0
         self.threshold_value = 127
         self.gamma_lut = None
+        self.applied_binary = False
+        self.binary_backup = None
         
         # スライダーをリセット
         for param in ['shadow', 'highlight', 'temperature', 'threshold']:
@@ -443,6 +445,9 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         # カーブエディタリセット
         if hasattr(self, 'curve_editor') and self.curve_editor:
             self.curve_editor._reset_curve()
+
+        if hasattr(self, '_buttons') and 'undo_binary' in self._buttons:
+            self._buttons['undo_binary'].configure(state="disabled")
         
         self._on_parameter_change()
 
@@ -490,6 +495,7 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
             self.update_image_callback(self.binary_backup)
         self.image = self.binary_backup
         self.binary_backup = None
+        self.applied_binary = False
         if hasattr(self, '_buttons') and 'undo_binary' in self._buttons:
             self._buttons['undo_binary'].configure(state="disabled")
 
@@ -534,6 +540,19 @@ class DensityAdjustmentPlugin(ImageProcessorPlugin):
         """閾値変更時の処理（内部用）・強化スライダー対応"""
         # 強化スライダーシステムでオーバーシュート対策済み
         self.threshold_value = value
+
+        # 2値化実行後は、バックアップしている元画像に対して再2値化を適用する
+        if self.applied_binary:
+            source_image = self.binary_backup if self.binary_backup is not None else self.image
+            if source_image is not None:
+                result_img = self.apply_binary_threshold(source_image)
+                if hasattr(self, 'update_image_callback') and callable(self.update_image_callback):
+                    self.update_image_callback(result_img)
+                self.image = result_img
+                if self._show_histogram:
+                    self._update_histogram(result_img)
+            return
+
         self._on_parameter_change()
 
     def _on_apply_binary_threshold(self) -> None:

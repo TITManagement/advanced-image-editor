@@ -69,7 +69,7 @@ advanced-image-editor
 aie
 
 # 直接実行
-python src/main_plugin.py
+python src/advanced_image_editor.py
 ```
 
 #### **デスクトップから**
@@ -228,7 +228,7 @@ sudo pacman -S tk python-dev
 
 ### 📄 **ライセンス**
 
-MIT License - 詳細は [LICENSE](LICENSE) ファイルを参照
+MIT License - 詳細は [LICENSE](../../LICENSE) ファイルを参照
 
 ---
 

@@ -1,6 +1,6 @@
 # 開発者ガイド - Advanced Image Editor
 
-> 🏠 **メインハブ**: [README](../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](USER_GUIDE.md) | [アーキテクチャ](ARCHITECTURE.md) | [技術ノート](TECHNICAL_NOTES.md)
+> 🏠 **メインハブ**: [README](../../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](../guide/USER_GUIDE.md) | [アーキテクチャ](../architecture/ARCHITECTURE.md) | [技術ノート](../architecture/TECHNICAL_NOTES.md)
 
 ## 目次
 - [セットアップ](#セットアップ)
@@ -11,9 +11,9 @@
 
 ## セットアップ
 
-- Python 3.8以上（3.9以上推奨）
+- Python 3.9以上
 - Git
-- 必要な外部ライブラリは `requirements.txt` 参照
+- 必要な外部ライブラリは `pyproject.toml`（補助的に `requirements.txt`）を参照
 - 仮想環境推奨: `python3 -m venv .venv && source .venv/bin/activate`
 - インストール: `pip install -e .[dev]`
 - 開発ツール: `black`, `flake8`, `pytest` など
@@ -38,15 +38,15 @@
 
 | モジュール | 役割・機能 | 依存関係 |
 |-----------|------------|----------|
-| `core.plugin_base` | プラグイン基底クラス・管理・UIヘルパー | すべてのプラグイン、main_plugin |
+| `core.plugin_base` | プラグイン基底クラス・管理・UIヘルパー | すべてのプラグイン、advanced_image_editor |
 | `core.logging` | 統一ログシステム | 全体（開発・運用） |
 | `plugins.basic.basic_plugin` | 明度・コントラスト・彩度調整 | core.plugin_base |
 | `plugins.density.density_plugin` | ガンマ補正・シャドウ/ハイライト・色温度 | core.plugin_base, ui.curve_editor |
 | `plugins.filters.filters_plugin` | ブラー・シャープ・ノイズ除去・エンボス・エッジ検出 | core.plugin_base |
 | `plugins.analysis.analysis_plugin` | ヒストグラム解析・特徴点検出・フーリエ変換 | core.plugin_base |
-| `ui.main_window` | メインウィンドウUI | main_plugin |
+| `ui.main_window` | メインウィンドウUI | advanced_image_editor |
 | `ui.curve_editor` | ガンマ補正カーブエディタ | plugins.density |
-| `editor.image_editor` | 画像の読み込み・保存・表示 | main_plugin |
+| `editor.image_editor` | 画像の読み込み・保存・表示 | advanced_image_editor |
 | `utils.image_utils` | 画像変換・フォーマット処理 | plugins, editor |
 | `utils.platform_utils` | クロスプラットフォーム対応・ファイルダイアログ | editor, ui |
 | `plugins.super_resolution.*` | SRResNet / Real-ESRGAN 等の汎用超解像ユーティリティ | フィルタープラグイン等、超解像を必要とする複数機能から参照 |
@@ -55,7 +55,7 @@
 - **プラグインアーキテクチャ**：`core.plugin_base`を基底とし、各プラグインはこのクラスを継承。UIヘルパーも共通利用。
 - **UI分離設計**：`ui`配下にウィンドウ・カーブエディタ等のUI部品を分離。プラグインは必要に応じてUI部品を利用。
 - **ユーティリティ分離**：画像処理・OS依存処理は`utils`配下に集約。各プラグインやエディタから呼び出し。
-- **依存関係の流れ**：main_plugin → core/plugin_base → plugins/* → ui/*, utils/*, editor/*
+- **依存関係の流れ**：advanced_image_editor → core/plugin_base → plugins/* → ui/*, utils/*, editor/*
 - **外部ライブラリとの関係**：Pillow, OpenCV, CustomTkinter, numpy等は自作モジュール内部でラップ・拡張して利用。
 
 #### 参考：ディレクトリ構造
@@ -107,6 +107,15 @@ class YourPlugin(ImageProcessorPlugin):
 - カバレッジ: `pytest --cov=src --cov-report=html`
 - ビルド: `python scripts/build_distribution.py` または `python -m build`
 - CI: `.github/workflows/ci.yml` 参照（Pythonバージョンマトリクス、スタイルチェック、テスト）
+
+### プロセシングパイプライン移行 TODO
+
+- `feature/processing-pipeline` ブランチを作成し、開発環境を分離する
+- `ProcessingPipeline` / `ProcessingStep` の骨組みを追加し、現行の `apply_all_adjustments` フローと差し替えられる実験コードを用意する
+- `basic_adjustment` など代表的なプラグインをステートレス化し、`process_image(image, **params)` のみで動作するようリファクタリングする
+- プラグイン UI からパラメータスナップショットを生成・保存し、パイプライン経由で適用する処理経路を実装する
+- 操作履歴ベースの Undo/Redo を導入し、差分キャッシュ（タイル保存など）を後付けできる拡張ポイントを設計する
+- パイプラインと Undo の挙動を検証する統合テスト／ベンチマークを追加し、パフォーマンスと回帰を確認する
 
 ---
 

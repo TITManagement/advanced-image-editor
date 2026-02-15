@@ -1,6 +1,6 @@
 # 技術ノート - Advanced Image Editor
 
-> 🏠 **メインハブ**: [README](../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](USER_GUIDE.md) | [開発者ガイド](DEVELOPER_GUIDE.md) | [アーキテクチャ](ARCHITECTURE.md)
+> 🏠 **メインハブ**: [README](../../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](../guide/USER_GUIDE.md) | [開発者ガイド](../dev/DEVELOPER_GUIDE.md) | [アーキテクチャ](ARCHITECTURE.md)
 
 ## 目次
 - [UIソリューション](#UIソリューション)
@@ -1273,7 +1273,7 @@ class LoggedPlugin(ImageProcessorPlugin):
 これらの技術ノートにより、Advanced Image Editorの技術的な問題解決と最適化戦略を詳細に文書化しました。
 
 **ナビゲーション**:
-- 🏠 [メインハブに戻る](../README.md)
-- 📖 [エンドユーザー向けガイド](USER_GUIDE.md)
-- 👨‍💻 [開発者向け実装手順](DEVELOPER_GUIDE.md)
+- 🏠 [メインハブに戻る](../../README.md)
+- 📖 [エンドユーザー向けガイド](../guide/USER_GUIDE.md)
+- 👨‍💻 [開発者向け実装手順](../dev/DEVELOPER_GUIDE.md)
 - 🏗️ [システム全体の設計思想](ARCHITECTURE.md)

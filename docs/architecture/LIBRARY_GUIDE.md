@@ -36,14 +36,14 @@ src/
 
 
 | モジュール | 役割・機能 | 依存関係 |
-| `core.plugin_base` | プラグイン基底クラス・管理・UIヘルパー | すべてのプラグイン、main_plugin |
+| `core.plugin_base` | プラグイン基底クラス・管理・UIヘルパー | すべてのプラグイン、advanced_image_editor |
 | `core.logging` | 統一ログシステム | 全体（開発・運用） |
 | `plugins.basic.basic_plugin` | 明度・コントラスト・彩度調整 | core.plugin_base |
 | `plugins.density.density_plugin` | ガンマ補正・シャドウ/ハイライト・色温度 | core.plugin_base, ui.curve_editor |
 | `plugins.filters.filters_plugin` | ブラー・シャープ・ノイズ除去・エンボス・エッジ検出 | core.plugin_base |
-| `ui.main_window` | メインウィンドウUI | main_plugin |
+| `ui.main_window` | メインウィンドウUI | advanced_image_editor |
 | `ui.curve_editor` | ガンマ補正カーブエディタ | plugins.density |
-| `editor.image_editor` | 画像の読み込み・保存・表示 | main_plugin |
+| `editor.image_editor` | 画像の読み込み・保存・表示 | advanced_image_editor |
 | `utils.platform_utils` | クロスプラットフォーム対応・ファイルダイアログ | editor, ui |
 
 ---
@@ -69,7 +69,7 @@ from editor.image_editor import ImageEditor
 - **プラグインアーキテクチャ**：`core.plugin_base`を基底とし、各プラグインはこのクラスを継承。UIヘルパーも共通利用。
 - **UI分離設計**：`ui`配下にウィンドウ・カーブエディタ等のUI部品を分離。プラグインは必要に応じてUI部品を利用。
 - **ユーティリティ分離**：画像処理・OS依存処理は`utils`配下に集約。各プラグインやエディタから呼び出し。
-- **依存関係の流れ**：main_plugin → core/plugin_base → plugins/* → ui/*, utils/*, editor/*
+- **依存関係の流れ**：advanced_image_editor → core/plugin_base → plugins/* → ui/*, utils/*, editor/*
 - **外部ライブラリとの関係**：Pillow, OpenCV, CustomTkinter, numpy等は自作モジュール内部でラップ・拡張して利用。
 
 ---

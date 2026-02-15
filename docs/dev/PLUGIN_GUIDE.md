@@ -7,7 +7,7 @@
 1. `src/plugins/analysis/` ディレクトリに新規プラグインファイル（例: `my_plugin.py`）を作成
 2. `ImageProcessorPlugin` を継承したクラスを定義
 3. 必要なコールバック・UI生成・解析API・イベントハンドラを実装
-4. `main_plugin.py` でプラグインを登録
+4. `advanced_image_editor.py` でプラグインを登録
 
 ## 2. 設計方針（抜粋）
 - 外部APIはパブリックメソッド（アンダースコアなし）で公開
@@ -43,7 +43,7 @@
 
 1. `src/plugins/analysis/` に新規プラグインファイル（例: `my_plugin.py`）を作成
 2. `ImageProcessorPlugin` を継承したクラスを定義し、必要なコールバック・UI生成・解析API・イベントハンドラを実装
-3. `main_plugin.py` のプラグイン管理リストに新規クラスを追加
+3. `advanced_image_editor.py` のプラグイン管理リストに新規クラスを追加
 4. 必要に応じて以下も行う
     - 関連するUI部品やコールバックの設定
     - `docs/` 配下へのガイドやサンプルの追加
@@ -253,7 +253,7 @@ class MultiFeaturePlugin(ImageProcessorPlugin):
 ## 6. プラグイン削除方法
 
 1. `src/plugins/analysis/` から対象プラグインファイル（例: `my_plugin.py`）を削除
-2. `main_plugin.py` のプラグイン管理リストから該当クラスの登録行を削除
+2. `advanced_image_editor.py` のプラグイン管理リストから該当クラスの登録行を削除
 3. 必要に応じて `docs/` 配下の関連ガイドやサンプルも削除
 4. 他プラグインやUI部品との依存関係がないか確認
 
