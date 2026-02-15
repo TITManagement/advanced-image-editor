@@ -9,14 +9,16 @@ import customtkinter as ctk
 class MainWindowUI:
     """メインウィンドウのUI構築を担当するクラス"""
     
-    def __init__(self, parent_window):
+    def __init__(self, parent_window, row_offset=0):
         """
         初期化
         
         Args:
             parent_window: 親ウィンドウ（通常はmain_plugin.pyのメインクラス）
+            row_offset: ヘッダー等で上段を使用する場合の開始行オフセット
         """
         self.parent = parent_window
+        self.row_offset = row_offset
         self.setup_window_properties()
         self.setup_main_layout()
         self.setup_canvas()
@@ -29,18 +31,20 @@ class MainWindowUI:
     
     def setup_main_layout(self):
         """メインレイアウトの構築"""
+        main_row = self.row_offset
+
         # グリッド設定
         self.parent.grid_columnconfigure(1, weight=1)
-        self.parent.grid_rowconfigure(0, weight=1)
+        self.parent.grid_rowconfigure(main_row, weight=1)
         
         # 左パネル（プラグインUI）
         self.left_panel = ctk.CTkFrame(self.parent, width=280)
-        self.left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
+        self.left_panel.grid(row=main_row, column=0, sticky="nsew", padx=(10, 5), pady=10)
         self.left_panel.grid_propagate(False)
         
         # 右パネル（画像表示エリア）
         self.right_panel = ctk.CTkFrame(self.parent)
-        self.right_panel.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
+        self.right_panel.grid(row=main_row, column=1, sticky="nsew", padx=(5, 10), pady=10)
         self.right_panel.grid_columnconfigure(0, weight=1)
         self.right_panel.grid_rowconfigure(1, weight=1)
     
@@ -103,12 +107,13 @@ class MainWindowUI:
     
     def setup_status_bar(self):
         """ステータスバーの設定"""
+        status_row = self.row_offset + 1
         self.status_label = ctk.CTkLabel(
             self.parent, 
             text="🎯 プラグインシステム版画像エディター起動完了", 
             font=("Arial", 12)
         )
-        self.status_label.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
+        self.status_label.grid(row=status_row, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 10))
     
     def setup_plugin_tabs(self, tab_definitions):
         """

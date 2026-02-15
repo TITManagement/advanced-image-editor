@@ -31,6 +31,7 @@ dependencies = [
     # GUI Framework
     "customtkinter>=5.2.2",
     "darkdetect>=0.8.0",
+    "aist-guiparts @ file:../../lab_automation_libs/internal-PyPI/dist/aist_guiparts-0.1.0-py3-none-any.whl",
 
     # Image Processing - クロスプラットフォーム対応
     "opencv-python>=4.13.0.92",
@@ -147,3 +148,7 @@ addopts = "-v --cov=src --cov-report=html --cov-report=term"
 # Cross-platform compatibility settings
 [tool.setuptools]
 platforms = ["any"]
+
+[tool.metadata]
+copyright = "AUTO kobo"
+author = "Takaya Inoue"

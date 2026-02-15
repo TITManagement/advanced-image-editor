@@ -29,7 +29,7 @@ from pathlib import Path
 import sys
 import os
 import json
-from typing import List
+from typing import Dict, List
 
 # プロジェクトの src ディレクトリをモジュール検索パスに追加（従来 import 互換のため）
 SRC_DIR = Path(__file__).resolve().parent
@@ -56,6 +56,16 @@ except ImportError as e:
     print("📦 以下のコマンドでライブラリをインストールしてください:")
     print("pip install customtkinter opencv-python numpy pillow")
     sys.exit(1)
+
+# ak_GUIparts（ヘッダー）を優先利用。未導入時は通常CTkへフォールバック。
+AK_HEADER_AVAILABLE = True
+try:
+    from aist_guiparts.ui_base import BaseApp
+except ImportError:
+    AK_HEADER_AVAILABLE = False
+    print("ℹ️ aist-guiparts が未インストールのため、標準ヘッダーなしで起動します")
+    print("   インストール例: pip install aist-guiparts")
+    BaseApp = ctk.CTk
 
 # ログシステムのインポート
 from core.logging import (
@@ -119,19 +129,33 @@ except ImportError as e:
     sys.exit(1)
 
 
-class AdvancedImageEditor(ctk.CTk):
+class AdvancedImageEditor(BaseApp):
     """
     Advanced Image Editor - プラグインシステム対応高度画像編集アプリケーション
     """
     
     def __init__(self):
-        super().__init__()
+        if AK_HEADER_AVAILABLE:
+            super().__init__(theme="dark")
+        else:
+            super().__init__()
+
+        self._ui_row_offset = 0
+        if AK_HEADER_AVAILABLE and hasattr(self, "build_default_titlebar"):
+            header = self.build_default_titlebar(
+                title="Advanced Image Editor",
+                logo_height=32,
+                font_size=18,
+            )
+            header.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 4))
+            self.grid_columnconfigure(0, weight=1)
+            self._ui_row_offset = 1
         
         # プラグインマネージャーの初期化
         self.plugin_manager = PluginManager()
         
         # UIセットアップ
-        self.ui = MainWindowUI(self)
+        self.ui = MainWindowUI(self, row_offset=self._ui_row_offset)
         
         # 画像エディターセットアップ
         self.image_editor = ImageEditor(
