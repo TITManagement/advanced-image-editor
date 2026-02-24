@@ -36,6 +36,12 @@ SRC_DIR = Path(__file__).resolve().parent
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
+# Matplotlib のキャッシュ先をプロジェクト内へ固定して、権限警告を回避する。
+if not os.environ.get("MPLCONFIGDIR"):
+    mpl_config_dir = SRC_DIR.parent / ".mplconfig"
+    mpl_config_dir.mkdir(parents=True, exist_ok=True)
+    os.environ["MPLCONFIGDIR"] = str(mpl_config_dir)
+
 # 互換用の外部ライブラリディレクトリ（必要な場合のみ）
 EXTRA_LIB = Path("/Users/tinoue/Development.local/lib-image_toolkit")
 if EXTRA_LIB.exists() and str(EXTRA_LIB) not in sys.path:

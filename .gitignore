@@ -1,37 +1,25 @@
-# Python cache / artifacts
+# Python bytecode / cache
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Packaging / build artifacts
 *.so
-.Python
 *.egg
 *.egg-info/
 .eggs/
-.installed.cfg
-MANIFEST
 build/
 dist/
-develop-eggs/
-downloads/
-eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+pip-wheel-metadata/
+MANIFEST
 
 # Virtual environments
-.venv/
-.venv_advanced_image_editor/
-.venv_aid/
+.venv*/
 env/
 venv/
 ENV/
-env.bak/
-venv.bak/
 
-# Tool / runtime cache
+# Test / type-check / lint cache
 .pytest_cache/
 .hypothesis/
 .mypy_cache/
@@ -41,6 +29,8 @@ venv.bak/
 coverage.xml
 htmlcov/
 *.cover
+
+# Runtime / temporary files
 .mplconfig/
 tmp/
 temp/
@@ -64,13 +54,3 @@ simple-workspace.code-workspace
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Application specific
-*.jpeg
-*.jpg
-*.png
-*.bmp
-*.tiff
-*.gif
-!SampleImage/*.jpeg
-!SampleImage/*.jpg

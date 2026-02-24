@@ -31,7 +31,7 @@ dependencies = [
     # GUI Framework
     "customtkinter>=5.2.2",
     "darkdetect>=0.8.0",
-    "aist-guiparts @ file:../../lab_automation_libs/internal-PyPI/dist/aist_guiparts-0.1.0-py3-none-any.whl",
+    "aist-guiparts>=0.1.0",
 
     # Image Processing - クロスプラットフォーム対応
     "opencv-python>=4.13.0.92",
@@ -107,16 +107,18 @@ Documentation = "https://github.com/TITManagement/advanced-image-editor#readme"
 "Bug Reports" = "https://github.com/TITManagement/advanced-image-editor/issues"
 
 [project.scripts]
-advanced-image-editor = "src.main_plugin:main"
-aie = "src.main_plugin:main"
+advanced-image-editor = "advanced_image_editor:main"
+aie = "advanced_image_editor:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["src*"]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.setuptools.package-data]
 "*" = ["*.png", "*.jpg", "*.jpeg", "*.gif", "*.ico", "*.json", "*.txt"]
@@ -147,6 +149,7 @@ addopts = "-v --cov=src --cov-report=html --cov-report=term"
 
 # Cross-platform compatibility settings
 [tool.setuptools]
+py-modules = ["advanced_image_editor"]
 platforms = ["any"]
 
 [tool.metadata]
