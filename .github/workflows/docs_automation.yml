@@ -31,7 +31,6 @@ jobs:
         if: ${{ inputs.mode == 'validate' }}
         run: |
           test -f README.md
-          test -d docs
       - name: Scaffold docs (dry-run)
         if: ${{ inputs.mode == 'scaffold' && inputs.apply_all != 'true' }}
         run: |
@@ -48,7 +47,7 @@ jobs:
 # Start Here
 
 - Setup: README.md を参照
-- Launch: `.venv/bin/python src/main_plugin.py`
+- Run: プロジェクトREADMEの起動手順に従ってください
 EOF
           fi
       - name: Commit and push when scaffold applied
