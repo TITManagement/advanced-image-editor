@@ -1,12 +1,12 @@
 # OSS_LICENSES
 
-Generated: 2026-02-24 03:21:17 UTC
+Generated: 2026-02-24 03:37:13 UTC
 
 | Package | License | Notes |
 |---|---|---|
 | customtkinter>=5.2.2 | UNKNOWN | derived from pyproject.toml |
 | darkdetect>=0.8.0 | UNKNOWN | derived from pyproject.toml |
-| aist-guiparts | UNKNOWN | derived from pyproject.toml |
+| aist-guiparts>=0.1.0 | UNKNOWN | derived from pyproject.toml |
 | opencv-python>=4.13.0.92 | UNKNOWN | derived from pyproject.toml |
 | pillow>=12.1.1 | UNKNOWN | derived from pyproject.toml |
 | numpy>=2.2.6 | UNKNOWN | derived from pyproject.toml |
