@@ -1,5 +1,16 @@
 # 開発者ガイド - Advanced Image Editor
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-DEV-DEVELOPER-GUIDE` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 > 🏠 **メインハブ**: [README](../../README.md) へ戻る | **関連ドキュメント**: [ユーザーガイド](../guide/USER_GUIDE.md) | [アーキテクチャ](../architecture/ARCHITECTURE.md) | [技術ノート](../architecture/TECHNICAL_NOTES.md)
 
 ## 目次
@@ -14,7 +25,7 @@
 - Python 3.9以上
 - Git
 - 必要な外部ライブラリは `pyproject.toml`（補助的に `requirements.txt`）を参照
-- 仮想環境推奨: `python3 -m venv .venv && source .venv/bin/activate`
+- 仮想環境推奨: `python3 -m venv .venv_aid && source .venv_aid/bin/activate`
 - インストール: `pip install -e .[dev]`
 - 開発ツール: `black`, `flake8`, `pytest` など
 
