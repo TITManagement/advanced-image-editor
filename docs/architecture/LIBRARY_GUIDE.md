@@ -1,5 +1,16 @@
 # ライブラリガイド - Advanced Image Editor
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-ARCHITECTURE-LIBRARY-GUIDE` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 このドキュメントは、プロジェクト内で利用されている自作ライブラリ（内部モジュール）の構成・役割・利用方法・依存関係を詳細にまとめたものです。
 
 ---

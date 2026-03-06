@@ -1,5 +1,16 @@
 # 🔍 検証ガイド（現行実装対応）
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-GUIDE-VERIFICATION-GUIDE` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 このドキュメントは、現在の `advanced-image-editor` 実装に合わせた検証手順です。  
 対象は **GUI/プラグイン中心** で、`contracts/` や `data/db/` など未実装モジュールは扱いません。
 
