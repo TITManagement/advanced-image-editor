@@ -85,26 +85,19 @@ from core.logging import (
     critical_print
 )
 
-# GUI framework（オプション機能：高度なUI）
-try:
-    from gui_framework.widgets.dialogs import MessageDialog
-    print("✅ gui_framework ライブラリ利用可能 - 高度なダイアログ機能が有効です")
-except ImportError:
-    print("ℹ️ gui_framework未インストール - 標準ダイアログを使用（基本機能は利用可能）")
-    # フォールバック用の基本MessageDialog
-    from tkinter import messagebox
-    class MessageDialog:
-        @staticmethod
-        def show_error(parent, title, message):
-            messagebox.showerror(title, message)
-        
-        @staticmethod
-        def show_warning(parent, title, message):
-            messagebox.showwarning(title, message)
-        
-        @staticmethod
-        def show_info(parent, title, message):
-            messagebox.showinfo(title, message)
+# 標準ダイアログラッパー（旧 gui_framework 依存を廃止）
+class MessageDialog:
+    @staticmethod
+    def show_error(parent, title, message):
+        messagebox.showerror(title, message)
+
+    @staticmethod
+    def show_warning(parent, title, message):
+        messagebox.showwarning(title, message)
+
+    @staticmethod
+    def show_info(parent, title, message):
+        messagebox.showinfo(title, message)
 
 # プラグインシステムのインポート
 try:
