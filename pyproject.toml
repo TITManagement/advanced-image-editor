@@ -1,4 +1,5 @@
 [project]
+maintainers = [{ name = "AUTO Kobo headquarters" }]
 name = "advanced_image_editor"
 version = "1.1.0"
 description = "Advanced Image Editor with Plugin System - カーブエディタ完全1:1マッピング対応の高度な画像編集アプリケーション"
@@ -70,7 +71,6 @@ dependencies = [
     "realesrgan>=0.3.0",
 ]
 
-# Development dependencies for gui_framework
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",

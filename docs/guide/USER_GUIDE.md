@@ -1,5 +1,16 @@
 # ユーザーガイド - Advanced Image Editor
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-GUIDE-USER-GUIDE` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 > 🏠 **メインハブ**: [README](../../README.md) へ戻る | **関連ドキュメント**: [開発者ガイド](../dev/DEVELOPER_GUIDE.md) | [アーキテクチャ](../architecture/ARCHITECTURE.md) | [技術ノート](../architecture/TECHNICAL_NOTES.md)
 
 ## 目次
@@ -15,10 +26,10 @@
 
 ```bash
 # 基本実行
-.venv/bin/python src/advanced_image_editor.py
+.venv_aid/bin/python src/advanced_image_editor.py
 
 # デバッグモード（詳細ログ表示）
-.venv/bin/python src/advanced_image_editor.py --debug
+.venv_aid/bin/python src/advanced_image_editor.py --debug
 ```
 
 ### 2. 画像の読み込み

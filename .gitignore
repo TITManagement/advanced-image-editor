@@ -54,3 +54,8 @@ simple-workspace.code-workspace
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# === local dev artifacts ===
+.vscode/
+pip.conf
+SampleImage/

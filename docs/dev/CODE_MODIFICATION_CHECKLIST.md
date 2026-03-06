@@ -1,5 +1,16 @@
 # コード修正チェックリスト
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-DEV-CODE-MODIFICATION-CHECKLIST` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 このファイルは、コード修正時に設計指針を思い出すためのクイックリファレンスです。
 
 ## 🚨 修正前の必須チェック
