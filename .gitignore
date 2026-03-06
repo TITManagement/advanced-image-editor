@@ -58,3 +58,4 @@ Thumbs.db
 # === local dev artifacts ===
 .vscode/
 pip.conf
+SampleImage/
