@@ -1,5 +1,16 @@
 # Advanced Image Editor - Plugin System
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-DRAFT-PROPOSED-README` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 プラグインシステム対応版画像編集アプリケーション
 
 ## 🎯 概要
@@ -27,10 +38,10 @@ python scripts/setup_dev_environment.py
 ### 実行
 ```bash
 # 基本実行
-.venv/bin/python src/advanced_image_editor.py
+.venv_aid/bin/python src/advanced_image_editor.py
 
 # デバッグモード  
-.venv/bin/python src/advanced_image_editor.py --debug
+.venv_aid/bin/python src/advanced_image_editor.py --debug
 ```
 
 ## 📚 ドキュメント

@@ -1,5 +1,16 @@
 # 設計指針 - Design Principles
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-ARCHITECTURE-DESIGN-PRINCIPLES` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 ## コード修正時の基本方針
 
 ### 1. 安全第一の原則

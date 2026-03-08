@@ -1,5 +1,16 @@
 # 🌍 **クロスプラットフォーム対応ガイド**
 
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-DOCS-GUIDE-CROSS-PLATFORM-GUIDE` |
+| 作成日 | `2026-03-01` |
+| 作成者 | `Takaya Inoue` |
+| 最終更新日 | `2026-03-01` |
+| 最終更新者 | `Takaya Inoue (with Codex)` |
+| 版数 | `v1.0` |
+| 状態 | `運用中` |
+
+
 ## Advanced Image Editor - Windows, macOS, Linux 完全対応
 
 ### 📋 **対応プラットフォーム**
@@ -27,8 +38,8 @@ python scripts/setup_dev_environment.py
 **Windows:**
 ```cmd
 # 仮想環境作成
-python -m venv .venv
-.venv\\Scripts\\activate
+python -m venv .venv_aid
+.venv_aid\\Scripts\\activate
 
 # 依存関係インストール
 pip install -e .[windows]
@@ -37,8 +48,8 @@ pip install -e .[windows]
 **macOS:**
 ```bash
 # 仮想環境作成
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv_aid
+source .venv_aid/bin/activate
 
 # 依存関係インストール  
 pip install -e .[macos]
@@ -51,8 +62,8 @@ sudo apt update
 sudo apt install python3-tk python3-dev
 
 # 仮想環境作成
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv_aid
+source .venv_aid/bin/activate
 
 # 依存関係インストール
 pip install -e .[linux]

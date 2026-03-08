@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INTERNAL_PYPI="/Users/tinoue/Development.local/internal-PyPI"
+INTERNAL_PYPI="/Users/tinoue/Development.local/app/AiLab/lab_automation_libs/package_management/internal-PyPI"
 
 echo "[1/4] ビルド中..."
 python -m build

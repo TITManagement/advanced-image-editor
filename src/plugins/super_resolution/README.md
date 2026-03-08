@@ -1,5 +1,18 @@
 # Super Resolution Standalone Module
 
+<!-- README_LEVEL: L3 -->
+
+| 項目 | 内容 |
+| --- | --- |
+| 文書ID | `AILAB-LAB-AUTOMATION-MODULE-ADVANCED-IMAGE-EDITOR-SRC-PLUGINS-SUPER-RESOLUTION-README` |
+| 作成日 | 2026-03-08 |
+| 作成者 | tinoue |
+| 最終更新日 | 2026-03-08 |
+| 最終更新者 | tinoue (with Codex) |
+| 版数 | v1.0 |
+| 状態 | 運用中 |
+
+
 独立したSuperResolution処理モジュールです。GIMP依存なしで任意のPythonプロジェクトで使用できます。
 
 ## 機能
